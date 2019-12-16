@@ -1,8 +1,10 @@
 ## Resource: "windows_computer"
 
 > :bulb:  
-> This resource is automatically created by the windows-computer, and cannot be destroyed.  
-> Terraform's "Create" lifecycle-method imports the resource, saves the imported state so it can be reinstated at a later time, and updates the resource based on the attributes in the Terraform configuration.  Terraform's "Destroy" lifecycle-method reinstates the originally imported state. 
+> This resource is automatically created by the windows-computer, and cannot be destroyed. 
+>  
+> - Terraform's "Create" lifecycle-method imports the resource, saves the imported state so it can be reinstated at a later time, and updates the resource based on the attributes in the Terraform configuration.  
+> - Terraform's "Destroy" lifecycle-method reinstates the originally imported state. 
 
 ### Example Usage
 
@@ -32,46 +34,62 @@ output "my_computer_rename_pending" {
 
 ### Argument Attributes Reference
 
-- `new_name` - (Optional) -  The new name of the windows-computer.  When this is different from the current name, then the exported `reboot_pending` attribute and `computer_rename_pending` attribute in `reboot_pending_details` will be set to `true`.  The new name will only become effective after a reboot of the windows computer.
+- `new_name` - (string, Optional) -  The new name of the windows-computer.  When this is different from the current name, then the exported `reboot_pending` attribute and `computer_rename_pending` attribute in `reboot_pending_details` will be set to `true`.  The new name will only become effective after a reboot of the windows computer.
 
-- `dns_client`
+- `dns_client` - (resource, Optional)
 
-  - `suffix_search_list` - (Optional) -  Specifies a list of global suffixes that can be used in the specified order by the DNS client for resolving the IP address of the computer name. These suffixes are appended in the specified order to resolve the computer name that is specified. 
+  - `suffix_search_list` - (list[string], Optional) -  Specifies a list of global suffixes that can be used in the specified order by the DNS client for resolving the IP address of the computer name. These suffixes are appended in the specified order to resolve the computer name that is specified. 
   This attribute cannot be set if the suffix search list setting is already deployed through Group Policy.
 
-  - `enable_devolution` - (Optional) -  Indicates whether devolution is activated. With devolution, the DNS resolver creates new FQDNs by appending the single-label, unqualified domain name with the parent suffix of the primary DNS suffix name, and the parent of that suffix, and so on, stopping if the name is successfully resolved or at a level specified in the DevolutionLevel parameter. Devolution works by removing the left-most label and continuing to get to the parent suffix. 
+  - `enable_devolution` - (boolean, Optional) -  Indicates whether devolution is activated. With devolution, the DNS resolver creates new FQDNs by appending the single-label, unqualified domain name with the parent suffix of the primary DNS suffix name, and the parent of that suffix, and so on, stopping if the name is successfully resolved or at a level specified in the DevolutionLevel parameter. Devolution works by removing the left-most label and continuing to get to the parent suffix. 
   This attribute cannot be set if the devolution level setting is already deployed through Group Policy.
 
-  - `devolution_level` - (Optional) -  Specifies the number of labels up to which devolution should occur. If this parameter is `0`, then the FRD algorithm is used. If this parameter is greather than `0`, then devolution occurs until the specified level. 
+  - `devolution_level` - (integer, Optional) -  Specifies the number of labels up to which devolution should occur.  The devolution level is an integer between `0` and `4294967295`.  If this attribute is `0`, then the FRD algorithm is used. If this attribute is greather than `0`, then devolution occurs until the specified level. 
   This attribute cannot be set if the devolution level setting is already deployed through Group Policy.
 
 <br/>
 
 ### Exported Attributes Reference
 
-- `name` -  The name of the windows-computer.
+```terraform
+{
+    name     = "MY-COMPUTER"
+    new_name = "MY-COMPUTER"
 
-- `reboot_pending` -  The windows-computer is waiting for a reboot.
+    dns_client = [{
+        suffix_search_list = [ "local" ]
+        enable_devolution  = true
+        devolution_level   = 0
+    }]
 
-- `reboot_pending_details` -  The reason for `reboot_pending`.
+    reboot_pending = false
+    reboot_pending_details = [{
+        computer_rename_pending = false
+        current_reboot_attemps  = false
+        dvd_reboot_signal       = false
+        file_rename_pending     = false
+        netlogon_pending        = false
+        packages_pending        = false
+        post_reboot_reporting   = false
+        reboot_in_progress      = false
+        reboot_pending          = false
+        reboot_required         = false
+        services_pending        = false
+        update_exe_volatile     = false
+    }]
+}
+```
 
-  ```terraform
-  reboot_pending_details {
-    computer_rename_pending = false
-    current_reboot_attemps  = false
-    dvd_reboot_signal       = false
-    file_rename_pending     = false
-    netlogon_pending        = false
-    packages_pending        = false
-    post_reboot_reporting   = false
-    reboot_in_progress      = false
-    reboot_pending          = false
-    reboot_required         = false
-    services_pending        = false
-    update_exe_volatile     = false
-  }
-  ```
-  - `computer_rename_pending` -  The windows-computer is waiting for a reboot because it was given a new name.
+All argument attributes are set to the value of the existing resource.
+In addition to the argument attributes:
+
+- `name` - (string) -  The name of the windows-computer.
+
+- `reboot_pending` - (boolean) -  The windows-computer is waiting for a reboot.
+
+- `reboot_pending_details` - (resource) -  The reason for `reboot_pending`.
+
+  - `computer_rename_pending` - (boolean) -  The windows-computer is waiting for a reboot because it was given a new name.
 
   - Other attributes are outside the scope of this documentation.  They refer to Windows registry items - see table below.  For more information, please refer to the Windows documentation
 
@@ -79,7 +97,7 @@ output "my_computer_rename_pending" {
 
 > :information_source:  
 > 
-> Mapping the `reboot_pending_details` on the Windows registry
+> Mapping of `reboot_pending_details` on the Windows registry
 > 
 > attribute                 | key, <br/> `true` condition
 > :-------------------------|:-------------------------- 
