@@ -81,19 +81,17 @@ output "my_computer_rename_pending" {
 > 
 > Mapping the `reboot_pending_details` on the Windows registry
 > 
-> attribute                 | key                                                                                                    | `true` condition
-> :-------------------------|:-------------------------------------------------------------------------------------------------------|:--------- 
-> `computer_rename_pending` | `HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\ComputerName`                                     | `ComputerName` value not equal to `$env:ComputerName`
-> `current_reboot_attemps`  | `HKLM:\SOFTWARE\Microsoft\ServerManager\CurrentRebootAttempts`                                         | key exist
-> `dvd_reboot_signal`       | `HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce`                                              | `DVDRebootSignal` value exists
-> `file_rename_pending`     | `HKLM:\SYSTEM\CurrentControlSet\Control\Session&nbsp;Manager`                                          | `PendingFileRenameOperations` value exists
->                     &nbsp;|                                                                                                  &nbsp;| `PendingFileRenameOperations2` value exists
-> `netlogon_pending`        | `HKLM:\SYSTEM\CurrentControlSet\Services\Netlogon`                                                     | `JoinDomain` value exists
->                     &nbsp;|                                                                                                  &nbsp;| `AvoidSpnSet` value exists
-> `packages_pending`        | `HKLM:\Software\Microsoft\Windows\CurrentVersion\Component&nbsp;Based&nbsp;Servicing\PackagesPending`  | key exist
-> `post_reboot_reporting`   | `HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto&nbsp;Update\PostRebootReporting`   | key exists 
-> `reboot_in_progress`      | `HKLM:\Software\Microsoft\Windows\CurrentVersion\Component&nbsp;Based&nbsp;Servicing\RebootInProgress` | key exist
-> `reboot_pending`          | `HKLM:\Software\Microsoft\Windows\CurrentVersion\Component&nbsp;Based&nbsp;Servicing\RebootPending`    | key exist
-> `reboot_required`         | `HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto&nbsp;Update\RebootRequired`        | key exists
-> `services_pending`        | `HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Services\Pending`                       | any GUID subkeys exist
-> `update_exe_volatile`     | `HKLM:\SOFTWARE\Microsoft\Updates`                                                                     | `UpdateExeVolatile` value not equal to 0
+> attribute                 | key, <br/> `true` condition
+> :-------------------------|:-------------------------- 
+> `computer_rename_pending` | `HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\ComputerName`, <br/> `ComputerName` value not equal to `$env:ComputerName`
+> `current_reboot_attemps`  | `HKLM:\SOFTWARE\Microsoft\ServerManager\CurrentRebootAttempts`, <br/> key exist
+> `dvd_reboot_signal`       | `HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce`, <br/> `DVDRebootSignal` value exists
+> `file_rename_pending`     | `HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager`, <br/> `PendingFileRenameOperations` value exists or `PendingFileRenameOperations2` value exists
+> `netlogon_pending`        | `HKLM:\SYSTEM\CurrentControlSet\Services\Netlogon`, <br/> `JoinDomain` value exists or `AvoidSpnSet` value exists
+> `packages_pending`        | `HKLM:\Software\Microsoft\Windows\CurrentVersion\Component Based Servicing\PackagesPending`, <br/> key exist
+> `post_reboot_reporting`   | `HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\PostRebootReporting`, <br/> key exists 
+> `reboot_in_progress`      | `HKLM:\Software\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootInProgress`, <br/> key exist
+> `reboot_pending`          | `HKLM:\Software\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending`, <br/> key exist
+> `reboot_required`         | `HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired`, <br/> key exists
+> `services_pending`        | `HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Services\Pending`, <br/> any GUID subkeys exist
+> `update_exe_volatile`     | `HKLM:\SOFTWARE\Microsoft\Updates`, <br/> `UpdateExeVolatile` value not equal to 0
