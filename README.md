@@ -181,7 +181,7 @@ output "my_data_source_exists" {
 
 ###### Argument Attributes Reference
 
-- `ignore_error_if_not_exists` - (boolean, Optional) -  If the data source doesn't exist, the Terraform state contains zeroed attributes for this data source.  No error is thrown. 
+- `ignore_error_if_not_exists` - (boolean, Optional, defaults to `false`) -  If the data source doesn't exist, the Terraform state contains zeroed attributes for this data source.  No error is thrown. 
 
 ###### Exported Attributes Reference
 
@@ -249,10 +249,10 @@ output "my_resource_exists" {
 
 ###### Argument Attributes Reference
 
-- `ignore_error_if_not_exists` - (boolean, Optional) -  If the resource doesn't exist, the Terraform state contains zeroed attributes for this resource.  No error is thrown. 
+- `ignore_error_if_not_exists` - (boolean, Optional, defaults to `false`) -  If the resource doesn't exist, the Terraform state contains zeroed attributes for this resource.  No error is thrown. 
 
 ###### Exported Attributes Reference
 
-- `exists` - (boolean) -  The data source exists, and the Terraform state contains the attributes of the resource.
+- `exists` - (boolean) -  The resource exists, and the Terraform state contains the attributes of the resource.
 
 <br/>

@@ -75,7 +75,7 @@ func readComputer(c *WindowsClient) (mosProperties *Computer, err error) {
     if err != nil {
         var runnerErr runner.Error
         errors.As(err, &runnerErr)
-        log.Printf("[ERROR][terraform-provider-windows/api/readComputer()] cannot read management_os\n")
+        log.Printf("[ERROR][terraform-provider-windows/api/readComputer()] cannot read computer\n")
         log.Printf("[ERROR][terraform-provider-windows/api/readComputer()] script exitcode: %d", runnerErr.ExitCode())
         log.Printf("[ERROR][terraform-provider-windows/api/readComputer()] script stdout: \n%s", stdout.String())
         log.Printf("[ERROR][terraform-provider-windows/api/readComputer()] script stderr: \n%s", stderr.String())
@@ -87,13 +87,13 @@ func readComputer(c *WindowsClient) (mosProperties *Computer, err error) {
 
         return nil, err
     }
-    log.Printf("[INFO][terraform-provider-windows/api/readComputer()] read management_os \n%s", stdout.String())
+    log.Printf("[INFO][terraform-provider-windows/api/readComputer()] read computer \n%s", stdout.String())
 
-    // convert stdout-JSON to mosProperties
+    // convert stdout-JSON to properties
     mosProperties = new(Computer)
     err = json.Unmarshal(stdout.Bytes(), mosProperties)
     if err != nil {
-        log.Printf("[ERROR][terraform-provider-windows/api/readComputer()] cannot convert json to 'mosProperties' for management_os\n")
+        log.Printf("[ERROR][terraform-provider-windows/api/readComputer()] cannot convert json to 'mosProperties' for computer\n")
         return nil, err
     }
 
@@ -198,7 +198,7 @@ func updateComputer(c *WindowsClient, mosProperties *Computer) error {
     // convert properties to JSON
     mosPropertiesJSON, err := json.Marshal(mosProperties)
     if err != nil {
-        log.Printf("[ERROR][terraform-provider-windows/api/updateComputer(mosProperties)] cannot cannot convert 'mosProperties' to json for management_os\n")
+        log.Printf("[ERROR][terraform-provider-windows/api/updateComputer(mosProperties)] cannot cannot convert 'mosProperties' to json for computer\n")
         return err
     }
 
@@ -213,7 +213,7 @@ func updateComputer(c *WindowsClient, mosProperties *Computer) error {
     if err != nil {
         var runnerErr runner.Error
         errors.As(err, &runnerErr)
-        log.Printf("[ERROR][terraform-provider-windows/api/updateComputer()] cannot update management_os\n")
+        log.Printf("[ERROR][terraform-provider-windows/api/updateComputer()] cannot update computer\n")
         log.Printf("[ERROR][terraform-provider-windows/api/updateComputer()] script exitcode: %d", runnerErr.ExitCode())
         log.Printf("[ERROR][terraform-provider-windows/api/updateComputer()] script stdout: \n%s", stdout.String())
         log.Printf("[ERROR][terraform-provider-windows/api/updateComputer()] script stderr: \n%s", stderr.String())
@@ -225,7 +225,7 @@ func updateComputer(c *WindowsClient, mosProperties *Computer) error {
 
         return err
     }
-    log.Printf("[INFO][terraform-provider-windows/api/updateComputer()] updated management_os \n%s", stdout.String())
+    log.Printf("[INFO][terraform-provider-windows/api/updateComputer()] updated computer \n%s", stdout.String())
 
     return nil
 }

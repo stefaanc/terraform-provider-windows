@@ -13,6 +13,7 @@ import (
     "strings"
 
     "github.com/hashicorp/terraform-plugin-sdk/helper/schema"
+    "github.com/hashicorp/terraform-plugin-sdk/helper/validation"
 
     "github.com/stefaanc/terraform-provider-windows/api"
     "github.com/stefaanc/terraform-provider-windows/windows/tfutil"
@@ -90,6 +91,8 @@ func resourceWindowsComputerDNSClient() *schema.Resource {
                 Type:     schema.TypeInt,   // uint32
                 Optional: true,
                 Computed: true,
+
+                ValidateFunc: validation.IntBetween(0, 4294967295),
             },
         },
     }

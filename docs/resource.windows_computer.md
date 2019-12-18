@@ -3,7 +3,8 @@
 > :bulb:  
 > This resource is automatically created by the windows-computer, and cannot be destroyed. 
 >  
-> - Terraform's "Create" lifecycle-method imports the resource, saves the imported state so it can be reinstated at a later time, and updates the resource based on the attributes in the Terraform configuration.  
+> - Terraform's "Create" lifecycle-method imports the resource, saves the imported state so it can be reinstated at a later time, and updates the resource based on the attributes in the Terraform configuration. 
+>  
 > - Terraform's "Destroy" lifecycle-method reinstates the originally imported state. 
 
 ### Example Usage
@@ -51,31 +52,31 @@ output "my_computer_rename_pending" {
 
 ### Exported Attributes Reference
 
-```terraform
+```json
 {
-    name     = "MY-COMPUTER"
-    new_name = "MY-COMPUTER"
+    "name"     = "MY-COMPUTER",
+    "new_name" = "MY-COMPUTER",
 
-    dns_client = [{
-        suffix_search_list = [ "local" ]
-        enable_devolution  = true
-        devolution_level   = 0
+    "dns_client" = [{
+        "suffix_search_list" = [ "local" ],
+        "enable_devolution"  = true,
+        "devolution_level"   = 0,
     }]
 
-    reboot_pending = false
-    reboot_pending_details = [{
-        computer_rename_pending = false
-        current_reboot_attemps  = false
-        dvd_reboot_signal       = false
-        file_rename_pending     = false
-        netlogon_pending        = false
-        packages_pending        = false
-        post_reboot_reporting   = false
-        reboot_in_progress      = false
-        reboot_pending          = false
-        reboot_required         = false
-        services_pending        = false
-        update_exe_volatile     = false
+    "reboot_pending" = false,
+    "reboot_pending_details" = [{
+        "computer_rename_pending" = false,
+        "current_reboot_attemps"  = false,
+        "dvd_reboot_signal"       = false,
+        "file_rename_pending"     = false,
+        "netlogon_pending"        = false,
+        "packages_pending"        = false,
+        "post_reboot_reporting"   = false,
+        "reboot_in_progress"      = false,
+        "reboot_pending"          = false,
+        "reboot_required"         = false,
+        "services_pending"        = false,
+        "update_exe_volatile"     = false
     }]
 }
 ```
