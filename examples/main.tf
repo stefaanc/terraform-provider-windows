@@ -7,7 +7,7 @@ provider "windows" {
 
 
 data "windows_link_ip_interface" "my_ip_interface_1" {
-    index = 24
+    index = 16
 }
 output "my_ip_interface_1_index" {
     value = data.windows_link_ip_interface.my_ip_interface_1.index
@@ -81,8 +81,8 @@ output "my_ip_interface_8_exists" {
 
 
 resource "windows_computer" "my_computer" {
-    #new_name = "MY-COMPUTER"
-    new_name = "HOLMECROFT-H2"
+    new_name = "MY-COMPUTER"
+    #new_name = "HOLMECROFT-H2"
 
     dns_client {
         suffix_search_list = [ "local" ]

@@ -13,6 +13,7 @@ import (
     "strings"
 
     "github.com/hashicorp/terraform-plugin-sdk/helper/schema"
+    "github.com/hashicorp/terraform-plugin-sdk/helper/validation"
 
     "github.com/stefaanc/terraform-provider-windows/api"
     "github.com/stefaanc/terraform-provider-windows/windows/tfutil"
@@ -26,9 +27,11 @@ func dataSourceWindowsLinkIPInterface() *schema.Resource {
 
         Schema: map[string]*schema.Schema{
             "index": &schema.Schema{
-                Type:     schema.TypeInt,
+                Type:     schema.TypeInt,   // uint32
                 Optional: true,
                 Computed: true,
+
+                ValidateFunc: validation.IntBetween(0, 4294967295),
             },
             "alias": &schema.Schema{
                 Type:     schema.TypeString,
@@ -50,6 +53,7 @@ func dataSourceWindowsLinkIPInterface() *schema.Resource {
                 Computed: true,
 
                 ConflictsWith: []string{ "index", "alias", "description" },
+                ValidateFunc: tfutil.ValidateUUID(),
             },
 
             "mac_address": &schema.Schema{

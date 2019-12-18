@@ -229,9 +229,9 @@ func resourceWindowsComputerCreate(d *schema.ResourceData, m interface{}) error 
         host = c.Host
     }
 
-    id := fmt.Sprintf("//%s/management_os", host)
+    id := fmt.Sprintf("//%s/computer", host)
 
-    log.Printf(`[INFO][terraform-provider-windows] creating windows_management_os %q
+    log.Printf(`[INFO][terraform-provider-windows] creating windows_computer %q
                     [INFO][terraform-provider-windows]     newName: %#v
                     [INFO][terraform-provider-windows]     dns_client {
                     [INFO][terraform-provider-windows]         suffix_search_list: %#v
@@ -246,34 +246,34 @@ func resourceWindowsComputerCreate(d *schema.ResourceData, m interface{}) error 
         dnsClient["devolution_level"],
     )
 
-    // import management_os
-    log.Printf("[INFO][terraform-provider-windows] importing windows_management_os %q into terraform state\n", id)
+    // import computer
+    log.Printf("[INFO][terraform-provider-windows] importing windows_computer %q into terraform state\n", id)
 
     managementOS, err := c.ReadComputer()
     if err != nil {
-        log.Printf("[ERROR][terraform-provider-windows] cannot import windows_management_os %q into terraform state\n", id)
+        log.Printf("[ERROR][terraform-provider-windows] cannot import windows_computer %q into terraform state\n", id)
         return err
     }
 
     // save existing config
     setOriginalComputerProperties(d, managementOS)
 
-    // update management_os
+    // update computer
     if managementOS.NewName              != managementOS.Name ||
        managementOS.NewName              != newName ||
        !reflect.DeepEqual(managementOS.DNSClient.SuffixSearchList, dnsClient["suffix_search_list"]) ||
        managementOS.DNSClient.EnableDevolution != dnsClient["enable_devolution"] ||
        managementOS.DNSClient.DevolutionLevel  != dnsClient["devolution_level"] {
 
-        log.Printf("[INFO][terraform-provider-windows] updating windows_management_os %q\n", id)
+        log.Printf("[INFO][terraform-provider-windows] updating windows_computer %q\n", id)
 
         mosProperties := new(api.Computer)
         expandComputerProperties(mosProperties, d)
 
         err := c.UpdateComputer(mosProperties)
         if err != nil {
-            log.Printf("[ERROR][terraform-provider-windows] cannot update windows_management_os %q\n", id)
-            log.Printf("[ERROR][terraform-provider-windows] cannot import windows_management_os %q into terraform state\n", id)
+            log.Printf("[ERROR][terraform-provider-windows] cannot update windows_computer %q\n", id)
+            log.Printf("[ERROR][terraform-provider-windows] cannot import windows_computer %q into terraform state\n", id)
             return err
         }
     }
@@ -281,7 +281,7 @@ func resourceWindowsComputerCreate(d *schema.ResourceData, m interface{}) error 
     // set id
     d.SetId(id)
 
-    log.Printf("[INFO][terraform-provider-windows] created windows_management_os %q\n", id)
+    log.Printf("[INFO][terraform-provider-windows] created windows_computer %q\n", id)
     return resourceWindowsComputerRead(d, m)
 }
 
@@ -293,18 +293,18 @@ func resourceWindowsComputerRead(d *schema.ResourceData, m interface{}) error {
     id       := d.Id()
     original := tfutil.GetResource(d, "original")   // make sure new terraform state includes 'original' from the old terraform state when doing a terraform refresh
 
-    log.Printf("[INFO][terraform-provider-windows] reading windows_management_os %q\n", id)
+    log.Printf("[INFO][terraform-provider-windows] reading windows_computer %q\n", id)
 
-    // read management-OS
+    // read computer
     managementOS, err := c.ReadComputer()
     if err != nil {
         // no lifecycle customizations
-        log.Printf("[ERROR][terraform-provider-windows] cannot read windows_management_os %q\n", id)
+        log.Printf("[ERROR][terraform-provider-windows] cannot read windows_computer %q\n", id)
 
         // set id
         d.SetId("")
 
-        log.Printf("[INFO][terraform-provider-windows] deleted windows_management_os %q from terraform state\n", id)
+        log.Printf("[INFO][terraform-provider-windows] deleted windows_computer %q from terraform state\n", id)
         return nil   // don't return an error to allow terraform refresh to update state
     }
 
@@ -312,7 +312,7 @@ func resourceWindowsComputerRead(d *schema.ResourceData, m interface{}) error {
     setComputerProperties(d, managementOS)
     d.Set("original", []interface{}{ original })   // make sure new terraform state includes 'original' from the old terraform state when doing a terraform refresh
 
-    log.Printf("[INFO][terraform-provider-windows] read windows_management_os %q\n", id)
+    log.Printf("[INFO][terraform-provider-windows] read windows_computer %q\n", id)
     return nil
 }
 
@@ -325,7 +325,7 @@ func resourceWindowsComputerUpdate(d *schema.ResourceData, m interface{}) error 
     newName   := d.Get("newName")
     dnsClient := tfutil.GetResource(d, "dns_client")
 
-    log.Printf(`[INFO][terraform-provider-windows] updating windows_management_os %q
+    log.Printf(`[INFO][terraform-provider-windows] updating windows_computer %q
                     [INFO][terraform-provider-windows]     newName: %#v
                     [INFO][terraform-provider-windows]     dns_client {
                     [INFO][terraform-provider-windows]         suffix_search_list: %#v
@@ -340,17 +340,17 @@ func resourceWindowsComputerUpdate(d *schema.ResourceData, m interface{}) error 
         dnsClient["devolution_level"],
     )
 
-    // update management_os
+    // update computer
     mosProperties := new(api.Computer)
     expandComputerProperties(mosProperties, d)
 
     err := c.UpdateComputer(mosProperties)
     if err != nil {
-        log.Printf("[WARNING][terraform-provider-windows] cannot update windows_management_os %q\n", id)
+        log.Printf("[WARNING][terraform-provider-windows] cannot update windows_computer %q\n", id)
         return err
     }
 
-    log.Printf("[INFO][terraform-provider-windows] updated windows_management_os %q\n", id)
+    log.Printf("[INFO][terraform-provider-windows] updated windows_computer %q\n", id)
     return resourceWindowsComputerRead(d, m)
 }
 
@@ -361,22 +361,22 @@ func resourceWindowsComputerDelete(d *schema.ResourceData, m interface{}) error 
 
     id       := d.Id()
 
-    log.Printf("[INFO][terraform-provider-windows] deleting windows_management_os %q\n", id)
-    log.Printf("[INFO][terraform-provider-windows] restore original properties for windows_management_os %q\n", id)
+    log.Printf("[INFO][terraform-provider-windows] deleting windows_computer %q\n", id)
+    log.Printf("[INFO][terraform-provider-windows] restore original properties for windows_computer %q\n", id)
 
-    // restore management_os
+    // restore computer
     mosProperties := new(api.Computer)
     expandOriginalComputerProperties(mosProperties, d)
 
     err := c.UpdateComputer(mosProperties)
     if err != nil {
-        log.Printf("[WARNING][terraform-provider-windows] cannot restore original properties for windows_management_os %q\n", id)
+        log.Printf("[WARNING][terraform-provider-windows] cannot restore original properties for windows_computer %q\n", id)
     }
 
     // set id
     d.SetId("")
 
-    log.Printf("[INFO][terraform-provider-windows] deleted windows_management_os %q\n", id)
+    log.Printf("[INFO][terraform-provider-windows] deleted windows_computer %q\n", id)
     return nil
 }
 

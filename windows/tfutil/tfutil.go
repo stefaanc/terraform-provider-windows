@@ -70,6 +70,22 @@ var ResourceXLifecycleSchema schema.Schema = schema.Schema{
 
 //------------------------------------------------------------------------------
 
+func ValidateUUID() schema.SchemaValidateFunc {
+    return func(i interface{}, k string) ([]string, []error) {
+        v, ok := i.(string)
+        if !ok {
+            return nil, []error{fmt.Errorf("expected type of %s to be a string", k)}
+        }
+
+        v = strings.ToLower(v)
+        r := regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+        if !r.MatchString(v) {
+            return nil, []error{fmt.Errorf("expected value of %s to be a valid UUID, using format \"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx\" where \"x\" is a hex digit, got: %s", k, v)}
+        }
+        return nil, nil
+    }
+}
+
 func ValidateSingleMAC() schema.SchemaValidateFunc {
     return func(i interface{}, k string) ([]string, []error) {
         v, ok := i.(string)

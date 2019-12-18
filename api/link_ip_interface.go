@@ -193,7 +193,7 @@ var readLinkIPInterfaceScript = script.New("readLinkIPInterface", "powershell", 
         Index                  = $networkAdapter.InterfaceIndex
         Alias                  = $networkAdapter.InterfaceAlias
         Description            = $networkAdapter.InterfaceDescription
-        GUID                   = $networkAdapter.InterfaceGUID
+        GUID                   = $networkAdapter.InterfaceGUID.Trim("{}")
         MACAddress             = $networkAdapter.MacAddress
         NetworkAdapterName     = $networkAdapter.Name
 
