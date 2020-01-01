@@ -94,19 +94,22 @@ output "my_ip_interface_8_exists" {
 
 ### Argument Attributes Reference
 
-- `index` - (integer, Optional) -  The index of the IP interface.
+> :warning:  
+> One of the identifying arguments is required.  Setting multiple will throw an error.. 
 
-- `alias` - (string, Optional) -  The alias of the IP interface.  This is typically the same as the `network_adapter_name`.
+- `index` - (integer, Optional, Identifying) -  The index of the IP interface.  One and only one of the identifying arguments `index`, `alias`, `description`, `guid`, `mac_address`, `network_adapter_name` or `vnetwork_adapter_name` must be specified.
 
-- `description` - (string, Optional) -  The description of the IP interface.  This is typically a string that identifies the chip-set used by the network adapter, like `"Intel(R) 82579LM Gigabit Network Connection"`.  If the network adapter is associated to a virtual network adapter (and thus doesn't have a chip-set), then this is typically starting with `"Hyper-V Virtual Ethernet Adapter"`
+- `alias` - (string, Optional, Identifying) -  The alias of the IP interface.  This is typically the same as the `network_adapter_name`.
 
-- `guid` - (string, Optional) -  The GUID of the IP interface/network adapter.  This GUID can be used to access the Windows registry.
+- `description` - (string, Optional, Identifying) -  The description of the IP interface.  This is typically a string that identifies the chip-set used by the network adapter, like `"Intel(R) 82579LM Gigabit Network Connection"`.  If the network adapter is associated to a virtual network adapter (and thus doesn't have a chip-set), then this is typically starting with `"Hyper-V Virtual Ethernet Adapter"`.
 
-- `mac_address` - (string, Optional) -  The MAC address of the network adapter.  If the network adapter is associated to a virtual network adapter, then this is typically the same as the MAC address of the virtual network adapter.
+- `guid` - (string, Optional, Identifying) -  The GUID of the IP interface/network adapter.  This GUID can be used to access the Windows registry.
 
-- `network_adapter_name` - (string, Optional) -  The name of the network adapter.  This is typically the same as the `alias` of the IP interface.  Also, if the network adapter is associated to a virtual network adapter, then this is typically of the form `"vEthernet ($vna)"` where `$vna` is the name of the virtual network adapter. 
+- `mac_address` - (string, Optional, Identifying) -  The MAC address of the network adapter.  If the network adapter is associated to a virtual network adapter, then this is typically the same as the MAC address of the virtual network adapter.
 
-- `vnetwork_adapter_name` - (string, Optional) -  The name of the virtual network adapter that is associated to the IP interface.  This attribute can only be used when the Hyper-V hypervisor is running on this windows-computer.
+- `network_adapter_name` - (string, Optional, Identifying) -  The name of the network adapter.  This is typically the same as the `alias` of the IP interface.  Also, if the network adapter is associated to a virtual network adapter, then this is typically of the form `"vEthernet ($vna)"` where `$vna` is the name of the virtual network adapter. 
+
+- `vnetwork_adapter_name` - (string, Optional, Identifying) -  The name of the virtual network adapter that is associated to the IP interface.  This attribute can only be used when the Hyper-V hypervisor is running on this windows-computer.
 
 - `x_lifecycle` - (resource, Optional)
 
@@ -118,21 +121,21 @@ output "my_ip_interface_8_exists" {
 
 ```json
 {
-    "index"                 = 7,
-    "alias"                 = "Ethernet",
-    "description"           = "Intel(R) 82579LM Gigabit Network Connection",
-    "guid"                  = "E34DC156-C49F-42DB-A6F6-D5609648D274",
-    "mac_address"           = "90-B1-1C-63-D3-82",
-    "network_adapter_name"  = "Ethernet",
-    "vnetwork_adapter_name" = "",
+    "index":                    7,
+    "alias":                    "Ethernet",
+    "description":              "Intel(R) 82579LM Gigabit Network Connection",
+    "guid":                     "E34DC156-C49F-42DB-A6F6-D5609648D274",
+    "mac_address":              "90-B1-1C-63-D3-82",
+    "network_adapter_name":     "Ethernet",
+    "vnetwork_adapter_name":    "",
 
-    "network_connection_names" = [ "Network", "WiFi" ],
-    "vswitch_name"             = "",
-    "computer_name"            = "MY-COMPUTER",
+    "network_connection_names": [ "Network", "WiFi" ],
+    "vswitch_name":             "",
+    "computer_name":            "MY-COMPUTER",
 
-    "x-lifecycle" = [{
-        "ignore_error_if_not_exists" = false,
-        "exists"                     = false
+    "x-lifecycle": [{
+        "ignore_error_if_not_exists": false,
+        "exists":                     false
     }]
 }
 ```

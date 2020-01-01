@@ -7,6 +7,7 @@
 package api
 
 import (
+    "sync"
 )
 
 //------------------------------------------------------------------------------
@@ -22,6 +23,9 @@ type WindowsClient struct {
     User       string
     Password   string
     Insecure   bool
+
+    // lock
+    Lock       sync.Mutex
 }
 
 //------------------------------------------------------------------------------

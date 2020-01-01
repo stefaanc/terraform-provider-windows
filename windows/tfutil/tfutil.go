@@ -18,8 +18,9 @@ import (
 
 var DataSourceXLifecycleSchema schema.Schema =  schema.Schema{
     Type:     schema.TypeList,
-    Optional: true,
     MaxItems: 1,
+    Optional: true,
+    Computed: true,
     Elem: &schema.Resource{
         Schema: map[string]*schema.Schema{
             // "ignore_error_if_not_exists" ignores the error when the data source doesn't exist, the resource is added to the terraform state with zeroed properties
@@ -40,8 +41,9 @@ var DataSourceXLifecycleSchema schema.Schema =  schema.Schema{
 
 var ResourceXLifecycleSchema schema.Schema = schema.Schema{
     Type:     schema.TypeList,
-    Optional: true,
     MaxItems: 1,
+    Optional: true,
+    Computed: true,
     Elem: &schema.Resource{
         Schema: map[string]*schema.Schema{
             // "import_if_exists" imports the resource into the terraform state when creating a resource that already exists
@@ -128,7 +130,7 @@ func StateToLower() schema.SchemaStateFunc {
 func StateToCamel() schema.SchemaStateFunc {
     return func(val interface{}) string {
         s := strings.ToLower(val.(string))
-        c := s[:0]
+        c := s[:1]
         return strings.Replace(s, c, strings.ToUpper(c), 1)
     }
 }
@@ -166,6 +168,10 @@ func GetResource(d *schema.ResourceData, name string) (m map[string]interface{})
         }
     }
 
+    if m == nil {
+        m = make(map[string]interface{})
+    }
+
     return m
 }
 
@@ -176,6 +182,10 @@ func ExpandResource(d map[string]interface{}, name string) (m map[string]interfa
         if len(listOfInterfaces2) > 0 {
             m = listOfInterfaces2[0].(map[string]interface{})
         }
+    }
+
+    if m == nil {
+        m = make(map[string]interface{})
     }
 
     return m
