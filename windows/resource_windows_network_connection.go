@@ -9,6 +9,7 @@ package windows
 import (
     "fmt"
     "log"
+    "strings"
 
     "github.com/hashicorp/terraform-plugin-sdk/helper/schema"
     "github.com/hashicorp/terraform-plugin-sdk/helper/validation"
@@ -22,13 +23,23 @@ import (
 func resourceWindowsNetworkConnection() *schema.Resource {
     return &schema.Resource{
         Schema: map[string]*schema.Schema{
+            "guid": &schema.Schema{
+                Type:     schema.TypeString,
+                Optional: true,
+                Computed: true,
+                ForceNew: true,
+
+                ValidateFunc: tfutil.ValidateUUID(),
+                StateFunc: tfutil.StateToUpper(),
+            },
+
             "ipv4_gateway_address": &schema.Schema{
                 Type:     schema.TypeString,
                 Optional: true,
                 Computed: true,
                 ForceNew: true,
 
-                ConflictsWith: []string{ "name" },
+                ConflictsWith: []string{ "guid" },
                 ValidateFunc: validation.SingleIP(),
             },
             "ipv6_gateway_address": &schema.Schema{
@@ -37,22 +48,37 @@ func resourceWindowsNetworkConnection() *schema.Resource {
                 Computed: true,
                 ForceNew: true,
 
-                ConflictsWith: []string{ "ipv4_gateway_address" },
+                ConflictsWith: []string{ "guid", "ipv4_gateway_address" },
                 ValidateFunc: validation.SingleIP(),
-                StateFunc: tfutil.StateToUpper(),
-            },
-            "allow_disconnect": &schema.Schema{
-                Type:     schema.TypeBool,
-                Optional: true,
+                StateFunc: tfutil.StateToLower(),
             },
 
             "name": &schema.Schema{
                 Type:     schema.TypeString,
                 Optional: true,
                 Computed: true,
+                // ForceNew: true,   // handled in CustomizeDiff method to avoid unwanted activation of ForceNew-condition because of 'new-name'
 
-                ConflictsWith: []string{ "ipv4_gateway_address", "ipv6_gateway_address" },
-                StateFunc: tfutil.StateToUpper(),
+                ConflictsWith: []string{ "guid", "ipv4_gateway_address", "ipv6_gateway_address" },
+            },
+            "old_name": &schema.Schema{
+                Type:     schema.TypeString,
+                Optional: true,
+                Computed: true,
+                ForceNew: true,
+
+                ConflictsWith: []string{ "guid", "ipv4_gateway_address", "ipv6_gateway_address", "name" },
+            },
+            "new_name": &schema.Schema{
+                Type:     schema.TypeString,
+                Optional: true,
+                Computed: true,
+            },
+
+            "allow_disconnect": &schema.Schema{
+                Type:     schema.TypeBool,
+                Optional: true,
+                Default:  false,
             },
 
             "connection_profile": &schema.Schema{
@@ -64,13 +90,28 @@ func resourceWindowsNetworkConnection() *schema.Resource {
                 StateFunc:    tfutil.StateToCamel(),
             },
 
-            "original": &schema.Schema{   // used to reset values on terraform destroy
+            "ipv4_connectivity": &schema.Schema{
+                Type:     schema.TypeString,
+                Computed: true,
+            },
+            "ipv6_connectivity": &schema.Schema{
+                Type:     schema.TypeString,
+                Computed: true,
+            },
+
+            // lifecycle customizations that are not supported by the 'lifecycle' meta-argument for persistent resources (similar to data-sources)
+            "x_lifecycle": &tfutil.DataSourceXLifecycleSchema,
+
+            // used to reset values on terraform destroy
+            "original": &schema.Schema{
                 Type:     schema.TypeList,
                 MaxItems: 1,
                 Computed: true,
                 Elem: resourceWindowsNetworkConnectionOriginal(),
             },
         },
+
+        CustomizeDiff: resourceWindowsNetworkConnectionCustomizeDiff,
 
         Create: resourceWindowsNetworkConnectionCreate,
         Read:   resourceWindowsNetworkConnectionRead,
@@ -82,7 +123,7 @@ func resourceWindowsNetworkConnection() *schema.Resource {
 func resourceWindowsNetworkConnectionOriginal() *schema.Resource {
     return &schema.Resource{
         Schema: map[string]*schema.Schema{
-            "name": &schema.Schema{
+            "old_name": &schema.Schema{
                 Type:     schema.TypeString,
                 Computed: true,
             },
@@ -97,12 +138,34 @@ func resourceWindowsNetworkConnectionOriginal() *schema.Resource {
 
 //------------------------------------------------------------------------------
 
+func resourceWindowsNetworkConnectionCustomizeDiff(d *schema.ResourceDiff, m interface{}) error {
+    // don't set 'ForceNew: true' in the schema for 'name', but handle the ForceNew-condition explicitly in CustomizeDiff.
+    // avoid that the ForceNew-condition is also activated when using SetNewComputed('name') for 'new_name'
+    // activate only when 'name' is different in config vs state
+    if d.HasChange("name") {
+        d.ForceNew("name")
+    }
+
+    if d.HasChange("new_name") {
+        if v, ok := d.GetOk("new_name"); ok && ( d.Get("name").(string) != v.(string) ) {
+            d.SetNewComputed("name")
+        }
+    }
+
+    return nil
+}
+
+//------------------------------------------------------------------------------
+
 func resourceWindowsNetworkConnectionCreate(d *schema.ResourceData, m interface{}) error {
     c := m.(*api.WindowsClient)
 
-    name               := d.Get("name").(string)
+    guid               := d.Get("guid").(string)
     ipv4GatewayAddress := d.Get("ipv4_gateway_address").(string)
     ipv6GatewayAddress := d.Get("ipv6_gateway_address").(string)
+    name               := d.Get("name").(string)
+    oldName            := d.Get("old_name").(string)
+    newName            := d.Get("new_name").(string)
     connectionProfile  := d.Get("connection_profile").(string)
 
     host := "localhost"
@@ -111,45 +174,102 @@ func resourceWindowsNetworkConnectionCreate(d *schema.ResourceData, m interface{
     }
 
     var id string
-    if        name != ""               { id = name
-    } else if ipv4GatewayAddress != "" { id = ipv4GatewayAddress
-    } else if ipv6GatewayAddress != "" { id = ipv6GatewayAddress
-    }
+    if guid != ""               { id = guid               } else
+    if ipv4GatewayAddress != "" { id = ipv4GatewayAddress } else
+    if ipv6GatewayAddress != "" { id = ipv6GatewayAddress } else
+    if name != ""               { id = name               } else
+    if oldName != ""            { id = oldName            }
     id = fmt.Sprintf("//%s/network_connections/%s", host, id)
 
     log.Printf(`[INFO][terraform-provider-windows] creating windows_network_connection %q
-                    [INFO][terraform-provider-windows]     name:                 %#v
+                    [INFO][terraform-provider-windows]     guid:                 %#v
                     [INFO][terraform-provider-windows]     ipv4_gateway_address: %#v
                     [INFO][terraform-provider-windows]     ipv6_gateway_address: %#v
+                    [INFO][terraform-provider-windows]     name:                 %#v
+                    [INFO][terraform-provider-windows]     old_name:             %#v
+                    [INFO][terraform-provider-windows]     new_name:             %#v
                     [INFO][terraform-provider-windows]     connection_profile:   %#v
 `       ,
         id,
-        name,
+        guid,
         ipv4GatewayAddress,
         ipv6GatewayAddress,
+        name,
+        oldName,
+        newName,
         connectionProfile,
     )
 
-    // import network
+    // import
     log.Printf("[INFO][terraform-provider-windows] importing windows_network_connection %q into terraform state\n", id)
 
+    x_lifecycle := tfutil.GetResource(d, "x_lifecycle")
+
     ncQuery := new(api.NetworkConnection)
-    ncQuery.Name               = name
+    ncQuery.GUID               = guid
     ncQuery.IPv4GatewayAddress = ipv4GatewayAddress
     ncQuery.IPv6GatewayAddress = ipv6GatewayAddress
+    ncQuery.Name               = name
+    ncQuery.OldName            = oldName
+    ncQuery.AllowDisconnect = d.Get("allow_disconnect").(bool)
 
     networkConnection, err := c.ReadNetworkConnection(ncQuery)
     if err != nil {
+        // lifecycle customizations: ignore_error_if_not_exists
+        v, ok := x_lifecycle["ignore_error_if_not_exists"]
+        if ok && v.(bool) && strings.Contains(err.Error(), "cannot find network_connection") {
+            log.Printf("[INFO][terraform-provider-windows] cannot import windows_network_connection %q into terraform state\n", id)
+
+            // set zeroed properties
+            d.Set("guid", "")
+            d.Set("ipv4_gateway_address", "")
+            d.Set("ipv6_gateway_address", "")
+            d.Set("name", "")
+            d.Set("old_name", "")
+            d.Set("new_name", "")
+            d.Set("allow_disconnect", false)
+            d.Set("connection_profile", "")
+            d.Set("ipv4_connectivity", "")
+            d.Set("ipv6_connectivity", "")
+
+            // set computed lifecycle properties
+            x_lifecycle["exists"] = false
+            d.Set("x_lifecycle", []interface{}{ x_lifecycle })
+
+            // set id
+            d.SetId(id)
+
+            log.Printf("[INFO][terraform-provider-windows] ignored error and added zeroed windows_network_connection %q to terraform state\n", id)
+            return nil
+        }
+
+        // no lifecycle customizations
         log.Printf("[ERROR][terraform-provider-windows] cannot import windows_network_connection %q into terraform state\n", id)
         return err
     }
 
-    // save existing config
+    // set computed lifecycle properties
+    x_lifecycle["exists"] = true
+    d.Set("x_lifecycle", []interface{}{ x_lifecycle })
+
+    // set properties
+    setNetworkConnectionProperties(d, networkConnection)
+
+    // save original config
     setOriginalNetworkConnectionProperties(d, networkConnection)
 
-    // update network
-    if networkConnection.Name != name                           ||
-       networkConnection.ConnectionProfile != connectionProfile {
+    if ( networkConnection.Name              == newName           ) &&
+       ( networkConnection.ConnectionProfile == connectionProfile ) {
+        // no update required
+
+        // set id
+        d.SetId(id)
+
+        log.Printf("[INFO][terraform-provider-windows] created windows_network_connection %q\n", id)
+        return nil
+
+    } else {
+        // update required
 
         log.Printf("[INFO][terraform-provider-windows] updating windows_network_connection %q\n", id)
 
@@ -159,16 +279,15 @@ func resourceWindowsNetworkConnectionCreate(d *schema.ResourceData, m interface{
         err := c.UpdateNetworkConnection(networkConnection, ncProperties)
         if err != nil {
             log.Printf("[ERROR][terraform-provider-windows] cannot update windows_network_connection %q\n", id)
-            log.Printf("[ERROR][terraform-provider-windows] cannot import windows_network_connection %q into terraform state\n", id)
             return err
         }
+
+        // set id
+        d.SetId(id)
+
+        log.Printf("[INFO][terraform-provider-windows] created windows_network_connection %q\n", id)
+        return resourceWindowsNetworkConnectionRead(d, m)
     }
-
-    // set id
-    d.SetId(id)
-
-    log.Printf("[INFO][terraform-provider-windows] created windows_network_connection %q\n", id)
-    return resourceWindowsNetworkConnectionRead(d, m)
 }
 
 //------------------------------------------------------------------------------
@@ -177,21 +296,50 @@ func resourceWindowsNetworkConnectionRead(d *schema.ResourceData, m interface{})
     c := m.(*api.WindowsClient)
 
     id                 := d.Id()
-    name               := d.Get("name").(string)
-    ipv4GatewayAddress := d.Get("ipv4_gateway_address").(string)
-    ipv6GatewayAddress := d.Get("ipv6_gateway_address").(string)
-    original           := tfutil.GetResource(d, "original")   // make sure new terraform state includes 'original' from the old terraform state when doing a terraform refresh
 
     log.Printf("[INFO][terraform-provider-windows] reading windows_network_connection %q\n", id)
 
+    x_lifecycle := tfutil.GetResource(d, "x_lifecycle")
+
     // read network connection
     ncQuery := new(api.NetworkConnection)
-    ncQuery.Name               = name
-    ncQuery.IPv4GatewayAddress = ipv4GatewayAddress
-    ncQuery.IPv6GatewayAddress = ipv6GatewayAddress
+    ncQuery.GUID               = d.Get("guid").(string)
+    ncQuery.IPv4GatewayAddress = d.Get("ipv4_gateway_address").(string)
+    ncQuery.IPv6GatewayAddress = d.Get("ipv6_gateway_address").(string)
+    ncQuery.Name               = d.Get("name").(string)
+    ncQuery.OldName            = d.Get("old_name").(string)
+    ncQuery.AllowDisconnect    = d.Get("allow_disconnect").(bool)
 
     networkConnection, err := c.ReadNetworkConnection(ncQuery)
     if err != nil {
+        // lifecycle customizations: ignore_error_if_not_exists
+        v, ok := x_lifecycle["ignore_error_if_not_exists"]
+        if ok && v.(bool) && strings.Contains(err.Error(), "cannot find network_connection") {
+            log.Printf("[INFO][terraform-provider-windows] cannot read windows_network_connection %q\n", id)
+
+            // set zeroed properties
+            d.Set("guid", "")
+            d.Set("ipv4_gateway_address", "")
+            d.Set("ipv6_gateway_address", "")
+            d.Set("name", "")
+            d.Set("old_name", "")
+            d.Set("new_name", "")
+            d.Set("allow_disconnect", false)
+            d.Set("connection_profile", "")
+            d.Set("ipv4_connectivity", "")
+            d.Set("ipv6_connectivity", "")
+
+            // set computed lifecycle properties
+            x_lifecycle["exists"] = false
+            d.Set("x_lifecycle", []interface{}{ x_lifecycle })
+
+            // set id
+            d.SetId(id)
+
+            log.Printf("[INFO][terraform-provider-windows] ignored error and added zeroed windows_network_connection %q to terraform state\n", id)
+            return nil
+        }
+
         // no lifecycle customizations
         log.Printf("[ERROR][terraform-provider-windows] cannot read windows_network_connection %q\n", id)
 
@@ -204,7 +352,6 @@ func resourceWindowsNetworkConnectionRead(d *schema.ResourceData, m interface{})
 
     // set properties
     setNetworkConnectionProperties(d, networkConnection)
-    d.Set("original", []interface{}{ original })   // make sure new terraform state includes 'original' from the old terraform state when doing a terraform refresh
 
     log.Printf("[INFO][terraform-provider-windows] read windows_network_connection %q\n", id)
     return nil
@@ -216,28 +363,36 @@ func resourceWindowsNetworkConnectionUpdate(d *schema.ResourceData, m interface{
     c := m.(*api.WindowsClient)
 
     id                 := d.Id()
-    name               := d.Get("name").(string)
+    guid               := d.Get("guid").(string)
     ipv4GatewayAddress := d.Get("ipv4_gateway_address").(string)
     ipv6GatewayAddress := d.Get("ipv6_gateway_address").(string)
+    name               := d.Get("name").(string)
+    oldName            := d.Get("old_name").(string)
+    newName            := d.Get("new_name").(string)
     connectionProfile  := d.Get("connection_profile").(string)
 
     log.Printf(`[INFO][terraform-provider-windows] updating windows_network_connection %q
-                    [INFO][terraform-provider-windows]     name:                 %#v
+                    [INFO][terraform-provider-windows]     guid:                 %#v
                     [INFO][terraform-provider-windows]     ipv4_gateway_address: %#v
                     [INFO][terraform-provider-windows]     ipv6_gateway_address: %#v
+                    [INFO][terraform-provider-windows]     name:                 %#v
+                    [INFO][terraform-provider-windows]     old_name:             %#v
+                    [INFO][terraform-provider-windows]     new_name:             %#v
                     [INFO][terraform-provider-windows]     connection_profile:   %#v
 `       ,
         id,
-        name,
+        guid,
         ipv4GatewayAddress,
         ipv6GatewayAddress,
+        name,
+        oldName,
+        newName,
         connectionProfile,
     )
 
     // update network
     ncQuery := new(api.NetworkConnection)
-    ncQuery.IPv4GatewayAddress = ipv4GatewayAddress
-    ncQuery.IPv6GatewayAddress = ipv6GatewayAddress
+    ncQuery.GUID            = guid
 
     ncProperties := new(api.NetworkConnection)
     expandNetworkConnectionProperties(ncProperties, d)
@@ -257,17 +412,14 @@ func resourceWindowsNetworkConnectionUpdate(d *schema.ResourceData, m interface{
 func resourceWindowsNetworkConnectionDelete(d *schema.ResourceData, m interface{}) error {
     c := m.(*api.WindowsClient)
 
-    id             := d.Id()
-    ipv4GatewayAddress := d.Get("ipv4_gateway_address").(string)
-    ipv6GatewayAddress := d.Get("ipv6_gateway_address").(string)
+    id   := d.Id()
 
-    log.Printf("[INFO][terraform-provider-windows] deleting windows_network_connection %q\n", id)
-    log.Printf("[INFO][terraform-provider-windows] restore original properties for windows_network_connection %q\n", id)
+    log.Printf("[INFO][terraform-provider-windows] deleting windows_network_connection %q from terraform state\n", id)
+    log.Printf("[INFO][terraform-provider-windows] restoring original properties for windows_network_connection %q\n", id)
 
     // restore network
     ncQuery := new(api.NetworkConnection)
-    ncQuery.IPv4GatewayAddress = ipv4GatewayAddress
-    ncQuery.IPv6GatewayAddress = ipv6GatewayAddress
+    ncQuery.GUID = d.Get("guid").(string)
 
     ncProperties := new(api.NetworkConnection)
     expandOriginalNetworkConnectionProperties(ncProperties, d)
@@ -280,26 +432,35 @@ func resourceWindowsNetworkConnectionDelete(d *schema.ResourceData, m interface{
     // set id
     d.SetId("")
 
-    log.Printf("[INFO][terraform-provider-windows] deleted windows_network_connection %q\n", id)
+    log.Printf("[INFO][terraform-provider-windows] deleted windows_network_connection %q from terraform state\n", id)
     return nil
 }
 
 //------------------------------------------------------------------------------
 
 func setNetworkConnectionProperties(d *schema.ResourceData, nProperties *api.NetworkConnection) {
-    d.Set("name", nProperties.Name)
+    d.Set("guid", nProperties.GUID)
+
     d.Set("ipv4_gateway_address", nProperties.IPv4GatewayAddress)
     d.Set("ipv6_gateway_address", nProperties.IPv6GatewayAddress)
+
+    d.Set("name", nProperties.Name)
+    // d.Set("old_name", d.Get("old_name"))
+    // d.Set("new_name", d.Get("new_name"))
+
+    // d.Set("allow_disconnect", d.Get("allow_disconnect"))
+
     d.Set("connection_profile", nProperties.ConnectionProfile)
+
+    d.Set("ipv4_connectivity", nProperties.IPv4Connectivity)
+    d.Set("ipv6_connectivity", nProperties.IPv6Connectivity)
 }
 
 func setOriginalNetworkConnectionProperties(d *schema.ResourceData, nProperties *api.NetworkConnection) {
     original := make(map[string]interface{})
 
-    original["name"]                 = nProperties.Name
-    original["ipv4_gateway_address"] = nProperties.IPv4GatewayAddress
-    original["ipv6_gateway_address"] = nProperties.IPv6GatewayAddress
-    original["connection_profile"]   = nProperties.ConnectionProfile
+    original["old_name"]           = nProperties.Name
+    original["connection_profile"] = nProperties.ConnectionProfile
 
     d.Set("original", []interface{}{ original })
 }
@@ -307,18 +468,14 @@ func setOriginalNetworkConnectionProperties(d *schema.ResourceData, nProperties 
 //------------------------------------------------------------------------------
 
 func expandNetworkConnectionProperties(nProperties *api.NetworkConnection, d *schema.ResourceData) {
-    if v, ok := d.GetOkExists("name"); ok {
-        nProperties.Name = v.(string)
-    }
-    if v, ok := d.GetOkExists("connection_profile"); ok {
-        nProperties.ConnectionProfile = v.(string)
-    }
+    nProperties.NewName           = d.Get("new_name").(string)
+    nProperties.ConnectionProfile = d.Get("connection_profile").(string)
 }
 
 func expandOriginalNetworkConnectionProperties(nProperties *api.NetworkConnection, d *schema.ResourceData) {
     original := tfutil.GetResource(d, "original")
 
-    nProperties.Name              = original["name"].(string)
+    nProperties.NewName           = original["old_name"].(string)
     nProperties.ConnectionProfile = original["connection_profile"].(string)
 }
 
