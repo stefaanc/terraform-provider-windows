@@ -161,7 +161,7 @@ This providers supports a number of extensions to the standard Terraform lifecyc
 
 ### Data Sources
 
-Sometimes one doesn't know if a data source exists or not.  An example is the `Default Switch` in Hyper-V.  This was introduced at some point in Hyper-V.  One could try to find out by looking at the version of Hyper-V.  One cannot read the data source in Terraform, unless one is absolutely sure it exists, because Terraform will throw an error when it is not there.
+Sometimes one doesn't know if a data source exists or not.  An example is the `Default Switch` in Hyper-V.  This was introduced in some version of Hyper-V.  One cannot read the data source in Terraform, unless one is absolutely sure it exists, because Terraform will throw an error when it is not there.
 
 Using the extended lifecycle attributes, one can read such data sources, without throwing an error when they don't exist.  This allows to implement dynamic Terraform behaviour depending on the existence of the data source.
 
@@ -198,8 +198,8 @@ Terraform support importing resources using `Terraform import`.  However, this r
 ```terraform
 resource "resource" "my_resource" {
     x_lifecycle {
-        import_if_exists   = true 
-        restore_on_destroy = true
+        import_if_exists    = true 
+        destroy_if_imported = true
     }
 }
 
@@ -212,24 +212,24 @@ output "my_resource_imported" {
 
 - `import_if_exists` - (boolean, Optional, defaults to `false`) -  If the resource exists, it is imported into the Terraform state, it's original attributes are saved so they can be reinstated at a later time, and the resource is updated based on the attributes in the Terraform configuration.  No error is thrown.
 
-- `restore_on_destroy` - (boolean, Optional, defaults to `true`) - If the resource is imported and if this attribute is set to `true`, the resource's original attributes are restored when calling `Terraform destroy`.  If the resource is imported and if this attribute is set to `false` the resource is destroyed when calling `Terraform destroy`.
+- `destroy_if_imported` - (boolean, Optional, defaults to `false`) - If the resource is imported and if this attribute is set to `false`, the resource's original attributes are restored when calling `Terraform destroy`.  If the resource is imported and if this attribute is set to `true` the resource is destroyed when calling `Terraform destroy`.
 
 ###### Exported Attributes Reference
 
-- `imported` - (boolean) -  The resource is imported.  Remrak that this attribute is not set when the resource was imported using `Terraform import`.
+- `imported` - (boolean) -  The resource is imported.  Remark that this attribute is not set when the resource was imported using `Terraform import`.
 
 <br/>
 
 ### Persistent Resources
 
-A special class of resources are resources that cannot be created using Terraform, and cannot be destroyed using Terraform.  In this respect they behave similar to data sources.  However, unlike data sources but similar to other resources, one can change some of the attributes of these resources.  Typical examples are physical resources or resources that are related to physical resources, like a physical computer or a physical network adapter.
+A special class of resources are resources that cannot be created using Terraform, and cannot be destroyed using Terraform.  In this respect they behave similar to data sources.  However, unlike data sources but similar to other resources, one can change some of the attributes of these resources.  Also, unlike data sources, the original attribute values will be restored when destroying the resource (even if these values were set outside of Terraform).  Typical examples are physical resources or resources that are related to physical resources, like a physical computer or a physical network adapter.
 
 For these resources:
  
 - Terraform's "Create" lifecycle-method imports the resource, saves the imported state so it can be reinstated at a later time, and updates the resource based on the attributes in the Terraform configuration.  
 - Terraform's "Destroy" lifecycle-method reinstates the originally imported state. 
 
-This corresponds to an implicit resource-`x-lifecycle` behaviour, where `import_if_exists = true` and `restore_on_destroy = true`.
+This corresponds to an implicit resource-`x-lifecycle` behaviour, where `import_if_exists = true` and `destroy_if_imported = false`.
 
 Some of these persistent resources can also support an explicit data-source-`x-lifecycle`.
 

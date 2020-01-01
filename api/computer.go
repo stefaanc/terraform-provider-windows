@@ -71,7 +71,9 @@ func readComputer(c *WindowsClient) (mosProperties *Computer, err error) {
     var stderr bytes.Buffer
 
     // run script
+    c.Lock.Lock()
     err = runner.Run(c, readComputerScript, nil, &stdout, &stderr)
+    c.Lock.Unlock()
     if err != nil {
         var runnerErr runner.Error
         errors.As(err, &runnerErr)
@@ -207,9 +209,11 @@ func updateComputer(c *WindowsClient, mosProperties *Computer) error {
     var stderr bytes.Buffer
 
     // run script
+    c.Lock.Lock()
     err = runner.Run(c, updateComputerScript, updateComputerArguments{
         MOSPropertiesJSON: string(mosPropertiesJSON),
     }, &stdout, &stderr)
+    c.Lock.Unlock()
     if err != nil {
         var runnerErr runner.Error
         errors.As(err, &runnerErr)
@@ -264,8 +268,8 @@ var updateComputerScript = script.New("updateComputer", "powershell", `
 
     $pendingName = ( Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\ComputerName' -Name 'ComputerName' -ErrorAction Ignore ).ComputerName
     # remark that $pendingName is different from the current $env:ComputerName when there is a reboot pending because of a previous computer-name change
-    if ( $pendingName -ne $mosProperties.NewName ) {
-        # Rename-Computer doesn't allow you to change the computer-name back to the current $env:ComputerName after a previous computer-name change - using WMI does allow this
+    if ( ( $mosProperties.NewName -ne "" ) -and ( $mosProperties.NewName -ne $pendingName ) ) {
+        # Rename-Computer doesn't allow you to change the pending computer-name back to the current $env:ComputerName after a previous computer-name change - using WMI does allow this
         $returnValue = ( Invoke-WmiMethod -Name 'Rename' -Path "Win32_ComputerSystem.Name='$env:ComputerName'" -ArgumentList "$( $mosProperties.NewName )" ).ReturnValue; catchExit $returnValue
     }
 

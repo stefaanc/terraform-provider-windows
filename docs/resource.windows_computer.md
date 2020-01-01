@@ -54,34 +54,33 @@ output "my_computer_rename_pending" {
 
 ```json
 {
-    "name"     = "MY-COMPUTER",
-    "new_name" = "MY-COMPUTER",
+    "name":     "MY-COMPUTER",
+    "new_name": "MY-COMPUTER",
 
-    "dns_client" = [{
-        "suffix_search_list" = [ "local" ],
-        "enable_devolution"  = true,
-        "devolution_level"   = 0,
+    "dns_client": [{
+        "suffix_search_list": [ "local" ],
+        "enable_devolution":  true,
+        "devolution_level":   0,
     }]
 
-    "reboot_pending" = false,
-    "reboot_pending_details" = [{
-        "computer_rename_pending" = false,
-        "current_reboot_attemps"  = false,
-        "dvd_reboot_signal"       = false,
-        "file_rename_pending"     = false,
-        "netlogon_pending"        = false,
-        "packages_pending"        = false,
-        "post_reboot_reporting"   = false,
-        "reboot_in_progress"      = false,
-        "reboot_pending"          = false,
-        "reboot_required"         = false,
-        "services_pending"        = false,
-        "update_exe_volatile"     = false
+    "reboot_pending": false,
+    "reboot_pending_details": [{
+        "computer_rename_pending": false,
+        "current_reboot_attemps":  false,
+        "dvd_reboot_signal":       false,
+        "file_rename_pending":     false,
+        "netlogon_pending":        false,
+        "packages_pending":        false,
+        "post_reboot_reporting":   false,
+        "reboot_in_progress":      false,
+        "reboot_pending":          false,
+        "reboot_required":         false,
+        "services_pending":        false,
+        "update_exe_volatile":     false
     }]
 }
 ```
 
-All argument attributes are set to the value of the existing resource.
 In addition to the argument attributes:
 
 - `name` - (string) -  The name of the windows-computer.
