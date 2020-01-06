@@ -121,24 +121,24 @@ When specifying `new_name`, don't use `name` to identify the connection but use 
 
 ```json
 {
-    "guid":                 "C42B1E6D-0856-4932-B06C-3085DA1B1978"
+    "guid":                 "C42B1E6D-0856-4932-B06C-3085DA1B1978",
 
-    "ipv4_gateway_address": "192.168.2.1"
-    "ipv6_gateway_address": "fe80::69c2:41ab:c6a1:1"
+    "ipv4_gateway_address": "192.168.2.1",
+    "ipv6_gateway_address": "fe80::69c2:41ab:c6a1:1",
 
-    "name":                 "My-Network"
-    "old_name":             ""
-    "new_name":             ""
+    "name":                 "My-Network",
+    "old_name":             "",
+    "new_name":             "",
 
-    "allow_disconnect":     true
+    "allow_disconnect":     true,
 
-    "connection_profile":   "Private"
+    "connection_profile":   "Private",
 
-    "ipv4_connectivity":    "Internet"
-    "ipv6_connectivity":    "LocalNetwork"
+    "ipv4_connectivity":    "Internet",
+    "ipv6_connectivity":    "LocalNetwork",
 
     "x_lifecycle": [{
-        "ignore_error_if_not_exists": true
+        "ignore_error_if_not_exists": true,
         "exists":                     true
     }]      
 }

@@ -67,7 +67,7 @@ output "my_computer_2_rename_pending" {
         "suffix_search_list": [ "local" ],
         "enable_devolution":  true,
         "devolution_level":   0,
-    }]
+    }],
 
     "reboot_pending": false,
     "reboot_pending_details": [{

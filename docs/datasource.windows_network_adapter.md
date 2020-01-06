@@ -72,26 +72,26 @@ output "my_network_adapter_C_exists" {
 
 ```json
 {
-    "guid":                  "E34DC156-C49F-42DB-A6F6-D5609648D274"
+    "guid":                  "E34DC156-C49F-42DB-A6F6-D5609648D274",
 
-    "name":                  "Staging"
+    "name":                  "Staging",
 
-    "mac_address":           "90-B1-1C-63-D3-82"
-    "permanent_mac_address": "90-B1-1C-63-D3-82"
+    "mac_address":           "90-B1-1C-63-D3-82",
+    "permanent_mac_address": "90-B1-1C-63-D3-82",
 
     "dns_client": [{
-        "register_connection_address": true
+        "register_connection_address": true,
         "register_connection_suffix":  "staging.local"
-    }]
+    }],
 
-    "admin_status":          "Up"
-    "operational_status":    "Up"
-    "connection_status":     "Connected"
-    "connection_speed":      "100 Mbps"macAddress
-    "is_physical":           true
+    "admin_status":          "Up",
+    "operational_status":    "Up",
+    "connection_status":     "Connected",
+    "connection_speed":      "100 Mbps",
+    "is_physical":           true,
 
     "x_lifecycle": [{
-        "ignore_error_if_not_exists": true
+        "ignore_error_if_not_exists": true,
         "exists":                     true
     }]      
 }
