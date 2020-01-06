@@ -21,48 +21,23 @@ import (
 //------------------------------------------------------------------------------
 
 type NetworkAdapter struct {
-    Name                       string
-    MACAddress                 string
+    GUID                string
 
-    IPv4                       NetworkAdapterIPInterface
-    IPv6                       NetworkAdapterIPInterface
-    DNS                        NetworkAdapterDNSClient
+    Name                string
+    OldName             string
+    NewName             string
+
+    MACAddress          string
+    PermanentMACAddress string
+
+    DNSClient           []NetworkAdapterDNSClient
 
     // status
-    AdminStatus                string
-    OperationalStatus          string
-    ConnectionStatus           string
-    ConnectionSpeed            string
-    IsPhysical                 bool
-}
-
-type NetworkAdapterIPInterface struct {
-    InterfaceMetric                      uint32
-    InterfaceMetricObtainedAutomatically bool
-
-    DHCPEnabled                          bool
-
-    IPAddresses                          []NetworkAdapterIPAddress
-    IPAddressObtainedAutomatically       bool
-    Gateways                             []NetworkAdapterGateway
-    GatewayObtainedAutomatically         bool
-    DNSAddresses                         []string
-    DNSAddressesObtainedAutomatically    bool
-
-    ConnectionStatus                     string
-    Connectivity                         string
-}
-
-type NetworkAdapterIPAddress struct {
-    Address      string
-    PrefixLength uint8
-    SkipAsSource bool
-}
-
-type NetworkAdapterGateway struct {
-    Address                          string
-    RouteMetric                      uint16
-    RouteMetricObtainedAutomatically bool
+    AdminStatus         string
+    OperationalStatus   string
+    ConnectionStatus    string
+    ConnectionSpeed     string
+    IsPhysical          bool
 }
 
 type NetworkAdapterDNSClient struct {
@@ -73,26 +48,31 @@ type NetworkAdapterDNSClient struct {
 //------------------------------------------------------------------------------
 
 func (c *WindowsClient) ReadNetworkAdapter(naQuery *NetworkAdapter) (naProperties *NetworkAdapter, err error) {
-    if naQuery.Name == "" {
-        return nil, fmt.Errorf("[ERROR][terraform-provider-windows/api/ReadNetworkAdapter(naQuery)] missing 'naQuery.Name'")
+    if ( naQuery.GUID    == "" ) &&
+       ( naQuery.Name    == "" ) &&
+       ( naQuery.OldName == "" ) {
+        return nil, fmt.Errorf("[ERROR][terraform-provider-windows/api/ReadNetworkAdapter(naQuery)] empty 'naQuery'")
     }
 
     return readNetworkAdapter(c, naQuery)
 }
 
-func (c *WindowsClient) UpdateNetworkAdapter(na *NetworkAdapter, naProperties *NetworkAdapter) error {
-    if na.Name == "" {
-        return fmt.Errorf("[ERROR][terraform-provider-windows/api/UpdateNetworkAdapter(na)] missing 'na.Name'")
+func (c *WindowsClient) UpdateNetworkAdapter(naQuery *NetworkAdapter, naProperties *NetworkAdapter) error {
+    if naQuery.GUID == "" {
+        return fmt.Errorf("[ERROR][terraform-provider-windows/api/UpdateNetworkAdapter(naQuery)] missing 'naQuery.GUID'")
     }
 
-    return updateNetworkAdapter(c, na, naProperties)
+    return updateNetworkAdapter(c, naQuery, naProperties)
 }
 
 //------------------------------------------------------------------------------
 
 func readNetworkAdapter(c *WindowsClient, naQuery *NetworkAdapter) (naProperties *NetworkAdapter, err error) {
     // find id
-    id := naQuery.Name
+    var id interface{}
+    if naQuery.GUID               != "" { id = naQuery.GUID               } else
+    if naQuery.Name               != "" { id = naQuery.Name               } else
+    if naQuery.OldName            != "" { id = naQuery.OldName            }
 
     // convert query to JSON
     naQueryJSON, err := json.Marshal(naQuery)
@@ -106,9 +86,11 @@ func readNetworkAdapter(c *WindowsClient, naQuery *NetworkAdapter) (naProperties
     var stderr bytes.Buffer
 
     // run script
+    c.Lock.Lock()
     err = runner.Run(c, readNetworkAdapterScript, readNetworkAdapterArguments{
         NAQueryJSON: string(naQueryJSON),
     }, &stdout, &stderr)
+    c.Lock.Unlock()
     if err != nil {
         var runnerErr runner.Error
         errors.As(err, &runnerErr)
@@ -124,7 +106,7 @@ func readNetworkAdapter(c *WindowsClient, naQuery *NetworkAdapter) (naProperties
 
         return nil, err
     }
-    log.Printf("[INFO][terraform-provider-windows/api/readNetworkAdapter()] read network_adapter %#v\n", naQuery.Name, stdout.String())
+    log.Printf("[INFO][terraform-provider-windows/api/readNetworkAdapter()] read network_adapter %#v \n%s", id, stdout.String())
 
     // convert stdout-JSON to naProperties
     naProperties = new(NetworkAdapter)
@@ -146,159 +128,49 @@ var readNetworkAdapterScript = script.New("readNetworkAdapter", "powershell", `
     $ProgressPreference = 'SilentlyContinue'   # progress-bar fails when using ssh
 
     $naQuery = ConvertFrom-Json -InputObject '{{.NAQueryJSON}}'
+    $guid    = $naQuery.GUID
+    $name    = $naQuery.Name
+    $oldName = $naQuery.OldName
 
-    $name = $naQuery.Name
-
-    $networkAdapter = Get-NetAdapter -Name $name -ErrorAction 'Ignore'
-    if ( -not $networkAdapter ) {
-        throw "cannot find network_adapter '$name'"
+    if ( $guid -ne "" ) {
+        $id = $guid
+        $networkAdapter = Get-NetAdapter -IncludeHidden -ErrorAction 'Ignore' | where { $_.InstanceID -eq "{$guid}" }
     }
-
-    $interfaceIndex = $networkAdapter.InterfaceIndex
+    elseif ( $name -ne "" ) {
+        $id = $name
+        $networkAdapter = Get-NetAdapter -Name $name -ErrorAction 'Ignore'
+    }
+    elseif ( $oldName -ne "" ) {
+        $id = $oldName
+        $networkAdapter = Get-NetAdapter -Name $oldName -ErrorAction 'Ignore'
+    }
+    if ( -not $networkAdapter ) {
+        throw "cannot find network_adapter '$id'"
+    }
 
     # prepare result
     $naProperties = @{
-        Name              = $networkAdapter.Name
-        MACAddress        = $networkAdapter.MacAddress
-
-        IPv4              = @{}
-        IPv6              = @{}
-        DNS               = @{}
-
-        AdminStatus       = $networkAdapter.AdminStatus.ToString()
-        OperationalStatus = $networkAdapter.ifOperStatus.ToString()
-        ConnectionStatus  = $networkAdapter.MediaConnectionState.ToString()
-        ConnectionSpeed   = $networkAdapter.LinkSpeed.ToString()
-        IsPhysical        = $networkAdapter.ConnectorPresent
+        GUID                = $networkAdapter.InstanceID.Trim("{}")
+        Name                = $networkAdapter.Name
+        MACAddress          = $networkAdapter.MacAddress
+        PermanentMACAddress = $networkAdapter.PermanentAddress -replace '..(?!$)', '$&-'
+        DNSClient           = @()
+        AdminStatus         = $networkAdapter.AdminStatus.ToString()
+        OperationalStatus   = $networkAdapter.ifOperStatus.ToString()
+        ConnectionStatus    = $networkAdapter.MediaConnectionState.ToString()
+        ConnectionSpeed     = $networkAdapter.LinkSpeed.ToString()
+        IsPhysical          = $networkAdapter.ConnectorPresent
     }
 
-    $ipv4Binding = Get-NetAdapterBinding -Name $name -ComponentID 'ms_tcpip' -ErrorAction 'Ignore'
-    if ( $ipv4Binding -and $ipv4Binding.Enabled ) {
-
-        $naProperties.IPv4 = @{
-            IPAddresses = @()
-            Gateways    = @()
-            DNServers   = @()
+    $dnsClient = Get-DNSClient -InterfaceAlias $networkAdapter.Name -ErrorAction 'Ignore'
+    if ( $dnsClient ) {
+        $naProperties.DNSClient += @{
+            RegisterConnectionAddress = $dnsClient.RegisterThisConnectionsAddress
+            RegisterConnectionSuffix  = ""
         }
 
-        $ipv4Interface = Get-NetIPInterface -InterfaceIndex $interfaceIndex -AddressFamily 'IPv4' -ErrorAction 'Ignore'
-        if ( $ipv4Interface ) {
-            $naProperties.IPv4.InterfaceMetric                      = $ipv4Interface.InterfaceMetric
-            $naProperties.IPv4.InterfaceMetricObtainedAutomatically = $( $ipv4Interface.AutomaticMetric -eq 'Enabled' )
-            $naProperties.IPv4.DHCPEnabled                          = $( $ipv4Interface.Dhcp -eq 'Enabled' )
-
-            $naProperties.IPv4.ConnectionStatus                     = $ipv4Interface.ConnectionState.ToString()
-        }
-
-        $ipv4Address = Get-NetIPAddress -InterfaceIndex $interfaceIndex -AddressFamily 'IPv4' -AddressState 'Preferred' -ErrorAction 'Ignore'
-        if ( $ipv4Address ) {
-            $ipv4Address | foreach {
-                $naProperties.IPv4.IPAddresses += @{
-                    Address      = $_.IPAddress
-                    PrefixLength = $_.PrefixLength
-                    SkipAsSource = $_.SkipAsSource
-                }
-            }
-            $naProperties.IPv4.IPAddressObtainedAutomatically = $( $ipv4Address.SuffixOrigin -ne 'Manual' )
-        }
-
-        $ipv4Route = Get-NetRoute -InterfaceIndex $interfaceIndex -AddressFamily 'IPv4' -DestinationPrefix '0.0.0.0/0' -ErrorAction 'Ignore'
-        if ( $ipv4Route ) {
-            $ipv4Route | foreach {
-                $naProperties.IPv4.Gateways += @{
-                    Address                          = $_.NextHop
-                    RouteMetric                      = $_.RouteMetric
-                    RouteMetricObtainedAutomatically = $( $_.AutomaticMetric -eq 'Enabled' )
-                }
-            }
-            if ( $naProperties.IPv4.Gateways.Length -gt 0 ) {
-                $naProperties.IPv4.GatewayObtainedAutomatically = -not $( Get-NetRoute -InterfaceIndex $interfaceIndex -AddressFamily 'IPv4' -DestinationPrefix '0.0.0.0/0' -NextHop $naProperties.IPv4.Gateways[0].Address -PolicyStore 'PersistentStore' )
-            }
-        }
-
-        $ipv4DNServerAddresses = Get-DNSClientServerAddress -InterfaceIndex $interfaceIndex -AddressFamily 'IPv4' -ErrorAction 'Ignore'
-        if ( $ipv4DNServerAddresses ) {
-            $ipv4DNServerAddresses.ServerAddresses | foreach {
-                $naProperties.IPv4.DNServers += $_
-            }
-            $naProperties.IPv4.DNSObtainedAutomatically = -not -not $( ( netsh interface ipv4 show dns $name | select-string 'DNS servers configured through DHCP:' ) -match 'DNS servers configured through DHCP:' )
-        }
-    }
-
-    $ipv6Binding = Get-NetAdapterBinding -Name $name -ComponentID 'ms_tcpip6' -ErrorAction 'Ignore'
-    if ( $ipv6Binding -and $ipv6Binding.Enabled ) {
-
-        $naProperties.IPv6 = @{
-            IPAddresses = @()
-            Gateways    = @()
-            DNServers   = @()
-        }
-
-        $ipv6Interface = Get-NetIPInterface -InterfaceIndex $interfaceIndex -AddressFamily 'IPv6' -ErrorAction 'Ignore'
-        if ( $ipv6Interface ) {
-            $naProperties.IPv6.InterfaceMetric                      = $ipv6Interface.InterfaceMetric
-            $naProperties.IPv6.InterfaceMetricObtainedAutomatically = $( $ipv6Interface.AutomaticMetric -eq 'Enabled' )
-            $naProperties.IPv6.DHCPEnabled                          = $( $ipv6Interface.Dhcp -eq 'Enabled' )
-        }
-
-        $ipv6Address = Get-NetIPAddress -InterfaceIndex $interfaceIndex -AddressFamily 'IPv6' -AddressState 'Preferred' -ErrorAction 'Ignore'
-        if ( $ipv6Address ) {
-            $ipv6Address | foreach {
-                $naProperties.IPv6.IPAddresses += @{
-                    Address      = $_.IPAddress
-                    PrefixLength = $_.PrefixLength
-                    SkipAsSource = $_.SkipAsSource
-                }
-                $naProperties.IPv6.RouteMetricObtainedAutomatically = $( $_.AutomaticMetric -eq 'Enabled' )
-            }
-            $naProperties.IPv6.IPAddressObtainedAutomatically = $( $ipv6Address.SuffixOrigin -ne 'Manual' )
-        }
-
-        $ipv6Route = Get-NetRoute -InterfaceIndex $interfaceIndex -AddressFamily 'IPv6' -DestinationPrefix '::/0' -ErrorAction 'Ignore'
-        if ( $ipv6Route ) {
-            $ipv6Route | foreach {
-                $naProperties.IPv6.Gateways += @{
-                    Address                          = $_.NextHop
-                    RouteMetric                      = $_.RouteMetric
-                    RouteMetricObtainedAutomatically = $( $_.AutomaticMetric -eq 'Enabled' )
-                }
-            }
-            if ( $naProperties.IPv4.Gateways.Length -gt 0 ) {
-                $naProperties.IPv6.GatewayObtainedAutomatically = -not $( Get-NetRoute -InterfaceIndex $interfaceIndex -AddressFamily 'IPv6' -DestinationPrefix '::/0' -NextHop $naProperties.IPv6.Gateways[0].Address -PolicyStore 'PersistentStore' )
-            }
-        }
-
-        $ipv6DNServerAddresses = Get-DNSClientServerAddress -InterfaceIndex $interfaceIndex -AddressFamily 'IPv6' -ErrorAction 'Ignore'
-        if ( $ipv6DNServerAddresses ) {
-            $ipv6DNServerAddresses.ServerAddresses | foreach {
-                $naProperties.IPv6.DNServers += $_
-            }
-            $naProperties.IPv6.DNSObtainedAutomatically = -not -not $( ( netsh interface ipv6 show dns $name | select-string 'DNS servers configured through DHCP:' ) -match 'DNS servers configured through DHCP:' )
-        }
-
-    }
-
-    if ( ( $ipv4Binding -and $ipv4Binding.Enabled ) -or ( $ipv6Binding -and $ipv6Binding.Enabled ) ) {
-
-        $dnsClient = Get-DNSClient -InterfaceIndex $interfaceIndex -ErrorAction 'Ignore'
-        if ( $dnsClient ) {
-            $naProperties.DNS.RegisterConnectionAddress = $dnsClient.RegisterThisConnectionsAddress
-            if ( $dnsClient.UseSuffixWhenRegistering ) {
-                $naProperties.DNS.RegisterConnectionSuffix = $dnsClient.ConnectionSpecificSuffix
-            }
-            else {
-                $naProperties.DNS.RegisterConnectionSuffix = ""
-            }
-        }
-
-        $connectionProfile = Get-ConnectionProfile -InterfaceIndex $interfaceIndex -ErrorAction 'Ignore'
-        if ( $connectionProfile ) {
-            if ( $ipv4Binding -and $ipv4Binding.Enabled ) {
-                $naProperties.IPv4.Connectivity = $connectionProfile.IPv4Connectivity.ToString()
-            }
-            if ( $ipv6Binding -and $ipv6Binding.Enabled ) {
-                $naProperties.IPv6.Connectivity = $connectionProfile.IPv6Connectivity.ToString()
-            }
+        if ( $dnsClient.UseSuffixWhenRegistering ) {
+            $naProperties.DNSClient[0].RegisterConnectionSuffix = $dnsClient.ConnectionSpecificSuffix
         }
     }
 
@@ -308,31 +180,38 @@ var readNetworkAdapterScript = script.New("readNetworkAdapter", "powershell", `
 //------------------------------------------------------------------------------
 
 func updateNetworkAdapter(c *WindowsClient, naQuery *NetworkAdapter, naProperties *NetworkAdapter) error {
-    // create buffer to capture stdout & stderr
-    var stdout bytes.Buffer
-    var stderr bytes.Buffer
+    // find id
+    id := naQuery.GUID
 
     // convert query to JSON
     naQueryJSON, err := json.Marshal(naQuery)
     if err != nil {
+        log.Printf("[ERROR][terraform-provider-windows/api/updateNetworkAdapter(naQuery, naProperties)] cannot cannot convert 'naQuery' to json for network_adapter %#v\n", id)
         return err
     }
 
     // convert properties to JSON
     naPropertiesJSON, err := json.Marshal(naProperties)
     if err != nil {
+        log.Printf("[ERROR][terraform-provider-windows/api/updateNetworkAdapter(naQuery, naProperties)] cannot cannot convert 'naProperties' to json for network_adapter %#v\n", id)
         return err
     }
 
+    // create buffer to capture stdout & stderr
+    var stdout bytes.Buffer
+    var stderr bytes.Buffer
+
     // run script
+    c.Lock.Lock()
     err = runner.Run(c, updateNetworkAdapterScript, updateNetworkAdapterArguments{
         NAQueryJSON:      string(naQueryJSON),
         NAPropertiesJSON: string(naPropertiesJSON),
     }, &stdout, &stderr)
+    c.Lock.Unlock()
     if err != nil {
         var runnerErr runner.Error
         errors.As(err, &runnerErr)
-        log.Printf("[ERROR][terraform-provider-windows/api/updateNetworkAdapter()] cannot update network_adapter\n")
+        log.Printf("[ERROR][terraform-provider-windows/api/updateNetworkAdapter()] cannot update network_adapter %#v\n", id)
         log.Printf("[ERROR][terraform-provider-windows/api/updateNetworkAdapter()] script exitcode: %d", runnerErr.ExitCode())
         log.Printf("[ERROR][terraform-provider-windows/api/updateNetworkAdapter()] script stdout: %s", stdout.String())
         log.Printf("[ERROR][terraform-provider-windows/api/updateNetworkAdapter()] script stderr: %s", stderr.String())
@@ -344,8 +223,8 @@ func updateNetworkAdapter(c *WindowsClient, naQuery *NetworkAdapter, naPropertie
 
         return err
     }
+    log.Printf("[INFO][terraform-provider-windows/api/updateNetworkAdapter()] updated network_adapter %#v\n", id)
 
-    log.Printf("[INFO][terraform-provider-windows/api/updateNetwork()] updated network_adapter\n")
     return nil
 }
 
@@ -359,68 +238,49 @@ var updateNetworkAdapterScript = script.New("updateNetworkAdapter", "powershell"
     $ProgressPreference = 'SilentlyContinue'   # progress-bar fails when using ssh
 
     $naQuery = ConvertFrom-Json -InputObject '{{.NAQueryJSON}}'
+    $guid = $naQuery.GUID
 
-    $name = $naQuery.Name
-
-    $networkAdapter = Get-NetAdapter -Name $name -ErrorAction 'Ignore'
+    $networkAdapter = Get-NetAdapter -IncludeHidden -ErrorAction 'Ignore' | where { $_.InstanceID -eq "{$guid}" }
     if ( -not $networkAdapter ) {
-        throw "cannot find network_adapter '$name'"
+        throw "cannot find network_adapter '$guid'"
     }
 
-    $interfaceIndex = $networkAdapter.InterfaceIndex
     $naProperties = ConvertFrom-Json -InputObject '{{.NAPropertiesJSON}}'
 
-    Set-NetAdapter -Name $name -MacAddress $naProperties.MACAddress -Confirm:$false | Out-Default
-
-    if ( $naProperties.IPv4.InterfaceDisabled ) {
-        Disable-NetAdapterBinding -Name $name -ComponentID 'ms_tcpip' -Confirm:$false | Out-Default
-    }
-    else {
-        Enable-NetAdapterBinding -Name $name -ComponentID 'ms_tcpip' -Confirm:$false | Out-Default
+    if ( $naProperties.DNSClient.Count -ne 0 ) {
+        $dnsClient = Get-DNSClient -InterfaceIndex $networkAdapter.InterfaceIndex -ErrorAction 'Ignore'
+        if ( !$dnsClient ) {
+            throw "cannot set 'dns_client'-properties for network_adapter '$guid', network_adapter is not a dns_client"
+        }
     }
 
-    if ( $naProperties.IPv6.InterfaceDisabled ) {
-        Disable-NetAdapterBinding -Name $name -ComponentID 'ms_tcpip6' -Confirm:$false | Out-Default
-    }
-    else {
-        Enable-NetAdapterBinding -Name $name -ComponentID 'ms_tcpip6' -Confirm:$false | Out-Default
+    if ( ( $naProperties.NewName -ne "" ) -and ( $naProperties.NewName -ne $networkAdapter.Name ) ) {
+        Rename-NetAdapter -InputObject $networkAdapter -NewName $naProperties.NewName -Confirm:$false | Out-Default
     }
 
-    if ( -not $naProperties.IPv4.InterfaceDisabled ) {
-        if ( $naProperties.IPv4.InterfaceMetricObtainedAutomatically -or ( $naProperties.IPv4.InterfaceMetric -eq 0 ) ) {
-            Set-NetIPInterface -InterfaceIndex $interfaceIndex -AddressFamily 'IPv4' -AutomaticMetric Enable -Confirm:$false | Out-Default
+    if ( $naProperties.MACAddress -ne "" ) {
+        if ( $naProperties.MACAddress -eq ( $networkAdapter.PermanentAddress -replace '..(?!$)', '$&-' ) ) {
+            Set-NetAdapter -InputObject $networkAdapter -MacAddress "" -Confirm:$false | Out-Default
         }
         else {
-            Set-NetIPInterface -InterfaceIndex $interfaceIndex -AddressFamily 'IPv4' -InterfaceMetric $naProperties.IPv4.InterfaceMetric -Confirm:$false | Out-Default
-        }
-
-        if ( -not $naProperties.IPv4.DNSObtainedAutomatically -and ( $naProperties.IPv4.DNServers.Length -gt 0 ) ) {
-            Set-DnsClientServerAddress -InterfaceIndex $interfaceIndex -ServerAddresses $naProperties.IPv4.DNServers -Confirm:$false | Out-Default
+            Set-NetAdapter -InputObject $networkAdapter -MacAddress $naProperties.MACAddress -Confirm:$false | Out-Default
         }
     }
 
-    if ( -not $naProperties.IPv6.InterfaceDisabled ) {
-        if ( $naProperties.IPv6.InterfaceMetricObtainedAutomatically -or ( $naProperties.IPv6.InterfaceMetric -eq 0 ) ) {
-            Set-NetIPInterface -InterfaceIndex $interfaceIndex -AddressFamily 'IPv6' -AutomaticMetric Enable -Confirm:$false | Out-Default
+    if ( $naProperties.DNSClient.Count -ne 0 ) {
+        $arguments = @{
+            RegisterThisConnectionsAddress = $naProperties.DNSClient[0].RegisterConnectionAddress
+            UseSuffixWhenRegistering       = $false
+            ConnectionSpecificSuffix       = ""
         }
-        else {
-            Set-NetIPInterface -InterfaceIndex $interfaceIndex -AddressFamily 'IPv6' -InterfaceMetric $naProperties.IPv6.InterfaceMetric -Confirm:$false | Out-Default
+        if ( $naProperties.DNSClient[0].RegisterConnectionSuffix -ne "" ) {
+            $arguments.UseSuffixWhenRegistering = $true
+            $arguments.ConnectionSpecificSuffix = $naProperties.DNSClient[0].RegisterConnectionSuffix
         }
 
-        if ( -not $naProperties.IPv6.DNSObtainedAutomatically -and ( $naProperties.IPv6.DNServers.Length -gt 0 ) ) {
-            Set-DnsClientServerAddress -InterfaceIndex $interfaceIndex -ServerAddresses $naProperties.IPv6.DNServers -Confirm:$false | Out-Default
-        }
+        Set-DNSClient -InterfaceAlias $networkAdapter.Name @arguments -Confirm:$false | Out-Default
     }
 
-    if ( -not $naProperties.IPv4.InterfaceDisabled -or -not $naProperties.IPv6.InterfaceDisabled ) {
-        Set-DNSClient -InterfaceIndex $interfaceIndex -RegisterThisConnectionsAddress $naProperties.RegisterConnectionAddress
-        if ( $naProperties.RegisterConnectionSuffix -eq "" ) {
-            Set-DNSClient -InterfaceIndex $interfaceIndex -ConnectionSpecificSuffix "" -UseSuffixWhenRegistering $false -Confirm:$false | Out-Default
-        }
-        else {
-            Set-DNSClient -InterfaceIndex $interfaceIndex -ConnectionSpecificSuffix $naProperties.RegisterConnectionSuffix -UseSuffixWhenRegistering $true -Confirm:$false | Out-Default
-        }
-    }
 `)
 
 //------------------------------------------------------------------------------
