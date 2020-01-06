@@ -21,13 +21,16 @@ import (
 //------------------------------------------------------------------------------
 
 type Computer struct {
-    Name                 string
-    NewName              string
+    Name                   string
+    NewName                string
 
-    DNSClient            ComputerDNSClient
+    DNSClient              ComputerDNSClient
 
-    RebootPending        bool
-    RebootPendingDetails ComputerRebootPendingDetails
+    RebootPending          bool
+    RebootPendingDetails   ComputerRebootPendingDetails
+
+    NetworkAdapterNames    []string
+    NetworkConnectionNames []string
 }
 
 type ComputerDNSClient struct {
@@ -53,19 +56,19 @@ type ComputerRebootPendingDetails struct {
 
 //------------------------------------------------------------------------------
 
-func (c *WindowsClient) ReadComputer() (mosProperties *Computer, err error) {
+func (c *WindowsClient) ReadComputer() (cProperties *Computer, err error) {
     return readComputer(c)
 }
 
 //------------------------------------------------------------------------------
 
-func (c *WindowsClient) UpdateComputer(mosProperties *Computer) error {
-    return updateComputer(c, mosProperties)
+func (c *WindowsClient) UpdateComputer(cProperties *Computer) error {
+    return updateComputer(c, cProperties)
 }
 
 //------------------------------------------------------------------------------
 
-func readComputer(c *WindowsClient) (mosProperties *Computer, err error) {
+func readComputer(c *WindowsClient) (cProperties *Computer, err error) {
     // create buffer to capture stdout & stderr
     var stdout bytes.Buffer
     var stderr bytes.Buffer
@@ -92,26 +95,26 @@ func readComputer(c *WindowsClient) (mosProperties *Computer, err error) {
     log.Printf("[INFO][terraform-provider-windows/api/readComputer()] read computer \n%s", stdout.String())
 
     // convert stdout-JSON to properties
-    mosProperties = new(Computer)
-    err = json.Unmarshal(stdout.Bytes(), mosProperties)
+    cProperties = new(Computer)
+    err = json.Unmarshal(stdout.Bytes(), cProperties)
     if err != nil {
-        log.Printf("[ERROR][terraform-provider-windows/api/readComputer()] cannot convert json to 'mosProperties' for computer\n")
+        log.Printf("[ERROR][terraform-provider-windows/api/readComputer()] cannot convert json to 'cProperties' for computer\n")
         return nil, err
     }
 
-    return mosProperties, nil
+    return cProperties, nil
 }
 
 var readComputerScript = script.New("readComputer", "powershell", `
     $ErrorActionPreference = 'Stop'
     $ProgressPreference = 'SilentlyContinue'   # progress-bar fails when using ssh
 
-    $mosProperties = @{
-        Name                 = $env:ComputerName
-        NewName              = ( Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\ComputerName' -Name 'ComputerName' -ErrorAction Ignore ).ComputerName
-        DNSClient            = @{}
-        RebootPending        = $false
-        RebootPendingDetails = @{
+    $cProperties = @{
+        Name                   = $env:ComputerName
+        NewName                = ( Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\ComputerName' -Name 'ComputerName' -ErrorAction Ignore ).ComputerName
+        DNSClient              = @{}
+        RebootPending          = $false
+        RebootPendingDetails   = @{
             RebootRequired        = $false
             PostRebootReporting   = $false
             DVDRebootSignal       = $false
@@ -125,11 +128,13 @@ var readComputerScript = script.New("readComputer", "powershell", `
             NetlogonPending       = $false
             CurrentRebootAttemps  = $false
         }
+        NetworkAdapterNames    = @()
+        NetworkConnectionNames = @()
     }
 
     $settings = Get-DnsClientGlobalSetting -ErrorAction Ignore
     if ( $settings ) {
-        $mosProperties.DNSClient = @{
+        $cProperties.DNSClient = @{
             SuffixSearchList = $settings.SuffixSearchList
             EnableDevolution = $settings.UseDevolution
             DevolutionLevel  = $settings.DevolutionLevel
@@ -137,70 +142,77 @@ var readComputerScript = script.New("readComputer", "powershell", `
     }
 
     if ( Get-Item -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired' -ErrorAction Ignore ) {
-        $mosProperties.RebootPendingDetails.RebootRequired = $true
-        $mosProperties.RebootPending = $true
+        $cProperties.RebootPendingDetails.RebootRequired = $true
+        $cProperties.RebootPending = $true
     }
     if ( Get-Item -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\PostRebootReporting' -ErrorAction Ignore ) {
-        $mosProperties.RebootPendingDetails.PostRebootReporting = $true
-        $mosProperties.RebootPending = $true
+        $cProperties.RebootPendingDetails.PostRebootReporting = $true
+        $cProperties.RebootPending = $true
     }
     if ( Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce' -Name 'DVDRebootSignal' -ErrorAction Ignore ) {
-        $mosProperties.RebootPendingDetails.DVDRebootSignal = $true
-        $mosProperties.RebootPending = $true
+        $cProperties.RebootPendingDetails.DVDRebootSignal = $true
+        $cProperties.RebootPending = $true
     }
     if ( Get-Item -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending' -ErrorAction Ignore ) {
-        $mosProperties.RebootPendingDetails.RebootPending = $true
-        $mosProperties.RebootPending = $true
+        $cProperties.RebootPendingDetails.RebootPending = $true
+        $cProperties.RebootPending = $true
     }
     if ( Get-Item -Path 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootInProgress' -ErrorAction Ignore ) {
-        $mosProperties.RebootPendingDetails.RebootInProgress = $true
-        $mosProperties.RebootPending = $true
+        $cProperties.RebootPendingDetails.RebootInProgress = $true
+        $cProperties.RebootPending = $true
     }
     if ( Get-Item -Path 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Component Based Servicing\PackagesPending' -ErrorAction Ignore ) {
-        $mosProperties.RebootPendingDetails.PackagesPending = $true
-        $mosProperties.RebootPending = $true
+        $cProperties.RebootPendingDetails.PackagesPending = $true
+        $cProperties.RebootPending = $true
     }
     if ( Get-ChildItem -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Services\Pending' -ErrorAction Ignore ) {
-        $mosProperties.RebootPendingDetails.ServicesPending = $true
-        $mosProperties.RebootPending = $true
+        $cProperties.RebootPendingDetails.ServicesPending = $true
+        $cProperties.RebootPending = $true
     }
     if ( ( $v = Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Updates' -Name 'UpdateExeVolatile' -ErrorAction Ignore | Select-Object -ExpandProperty 'UpdateExeVolatile' ) -and ( $v -ne 0 ) ) {
-        $mosProperties.RebootPendingDetails.UpdateExeVolatile = $true
-        $mosProperties.RebootPending = $true
+        $cProperties.RebootPendingDetails.UpdateExeVolatile = $true
+        $cProperties.RebootPending = $true
     }
-    if ( ( Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\ComputerName' -Name 'ComputerName' -ErrorAction Ignore ).ComputerName -ne $mosProperties.Name ) {
-        $mosProperties.RebootPendingDetails.ComputerRenamePending = $true
-        $mosProperties.RebootPending = $true
+    if ( ( Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\ComputerName' -Name 'ComputerName' -ErrorAction Ignore ).ComputerName -ne $cProperties.Name ) {
+        $cProperties.RebootPendingDetails.ComputerRenamePending = $true
+        $cProperties.RebootPending = $true
     }
     if (
         ( ( $v = Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager' -Name 'PendingFileRenameOperations'  -ErrorAction Ignore | Select-Object -ExpandProperty 'PendingFileRenameOperations'  ) -and $v ) -or
         ( ( $v = Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager' -Name 'PendingFileRenameOperations2' -ErrorAction Ignore | Select-Object -ExpandProperty 'PendingFileRenameOperations2' ) -and $v )
     ) {
-        $mosProperties.RebootPendingDetails.FileRenamePending = $true
-        $mosProperties.RebootPending = $true
+        $cProperties.RebootPendingDetails.FileRenamePending = $true
+        $cProperties.RebootPending = $true
     }
     if (
         ( Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\Netlogon' -Name 'JoinDomain'  -ErrorAction Ignore ) -or
         ( Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\Netlogon' -Name 'AvoidSpnSet' -ErrorAction Ignore )
     ) {
-        $mosProperties.RebootPendingDetails.NetlogonPending = $true
-        $mosProperties.RebootPending = $true
+        $cProperties.RebootPendingDetails.NetlogonPending = $true
+        $cProperties.RebootPending = $true
     }
     if ( Get-Item -Path 'HKLM:\SOFTWARE\Microsoft\ServerManager\CurrentRebootAttemps' -ErrorAction Ignore ) {
-        $mosProperties.RebootPendingDetails.CurrentRebootAttemps = $true
-        $mosProperties.RebootPending = $true
+        $cProperties.RebootPendingDetails.CurrentRebootAttemps = $true
+        $cProperties.RebootPending = $true
     }
 
-    Write-Output $( ConvertTo-Json -InputObject $mosProperties -Depth 100 )
+    Get-NetAdapter -ErrorAction 'Ignore' | foreach {
+        $cProperties.NetworkAdapterNames += $_.Name
+    }
+    Get-NetConnectionProfile -ErrorAction 'Ignore' | foreach {
+        $cProperties.NetworkConnectionNames += $_.Name
+    }
+
+    Write-Output $( ConvertTo-Json -InputObject $cProperties -Depth 100 )
 `)
 
 //------------------------------------------------------------------------------
 
-func updateComputer(c *WindowsClient, mosProperties *Computer) error {
+func updateComputer(c *WindowsClient, cProperties *Computer) error {
     // convert properties to JSON
-    mosPropertiesJSON, err := json.Marshal(mosProperties)
+    cPropertiesJSON, err := json.Marshal(cProperties)
     if err != nil {
-        log.Printf("[ERROR][terraform-provider-windows/api/updateComputer(mosProperties)] cannot cannot convert 'mosProperties' to json for computer\n")
+        log.Printf("[ERROR][terraform-provider-windows/api/updateComputer(cProperties)] cannot cannot convert 'cProperties' to json for computer\n")
         return err
     }
 
@@ -211,7 +223,7 @@ func updateComputer(c *WindowsClient, mosProperties *Computer) error {
     // run script
     c.Lock.Lock()
     err = runner.Run(c, updateComputerScript, updateComputerArguments{
-        MOSPropertiesJSON: string(mosPropertiesJSON),
+        CPropertiesJSON: string(cPropertiesJSON),
     }, &stdout, &stderr)
     c.Lock.Unlock()
     if err != nil {
@@ -235,7 +247,7 @@ func updateComputer(c *WindowsClient, mosProperties *Computer) error {
 }
 
 type updateComputerArguments struct{
-    MOSPropertiesJSON string
+    CPropertiesJSON string
 }
 
 var updateComputerScript = script.New("updateComputer", "powershell", `
@@ -264,19 +276,19 @@ var updateComputerScript = script.New("updateComputer", "powershell", `
         }
     }
 
-    $mosProperties = ConvertFrom-Json -InputObject '{{.MOSPropertiesJSON}}'
+    $cProperties = ConvertFrom-Json -InputObject '{{.CPropertiesJSON}}'
 
     $pendingName = ( Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\ComputerName' -Name 'ComputerName' -ErrorAction Ignore ).ComputerName
     # remark that $pendingName is different from the current $env:ComputerName when there is a reboot pending because of a previous computer-name change
-    if ( ( $mosProperties.NewName -ne "" ) -and ( $mosProperties.NewName -ne $pendingName ) ) {
+    if ( ( $cProperties.NewName -ne "" ) -and ( $cProperties.NewName -ne $pendingName ) ) {
         # Rename-Computer doesn't allow you to change the pending computer-name back to the current $env:ComputerName after a previous computer-name change - using WMI does allow this
-        $returnValue = ( Invoke-WmiMethod -Name 'Rename' -Path "Win32_ComputerSystem.Name='$env:ComputerName'" -ArgumentList "$( $mosProperties.NewName )" ).ReturnValue; catchExit $returnValue
+        $returnValue = ( Invoke-WmiMethod -Name 'Rename' -Path "Win32_ComputerSystem.Name='$env:ComputerName'" -ArgumentList "$( $cProperties.NewName )" ).ReturnValue; catchExit $returnValue
     }
 
     $arguments = @{
-        SuffixSearchList = $mosProperties.DNSClient.SuffixSearchList
-        UseDevolution    = $mosProperties.DNSClient.EnableDevolution
-        DevolutionLevel  = $mosProperties.DNSClient.DevolutionLevel
+        SuffixSearchList = $cProperties.DNSClient.SuffixSearchList
+        UseDevolution    = $cProperties.DNSClient.EnableDevolution
+        DevolutionLevel  = $cProperties.DNSClient.DevolutionLevel
     }
     Set-DnsClientGlobalSetting @arguments -Confirm:$false | Out-Default
 `)

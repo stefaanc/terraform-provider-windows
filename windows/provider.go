@@ -65,13 +65,16 @@ func Provider() terraform.ResourceProvider {
         },
 
         DataSourcesMap: map[string]*schema.Resource {
-            "windows_link_ip_interface": dataSourceWindowsLinkIPInterface(),
+            "windows_computer": dataSourceWindowsComputer(),
+            "windows_network_adapter": dataSourceWindowsNetworkAdapter(),
+            "windows_network_connection": dataSourceWindowsNetworkConnection(),
+            "windows_network_interface": dataSourceWindowsNetworkInterface(),
         },
 
         ResourcesMap: map[string]*schema.Resource{
             "windows_computer": resourceWindowsComputer(),
-            "windows_network_connection": resourceWindowsNetworkConnection(),
             "windows_network_adapter": resourceWindowsNetworkAdapter(),
+            "windows_network_connection": resourceWindowsNetworkConnection(),
         },
 
         ConfigureFunc: providerConfigure,

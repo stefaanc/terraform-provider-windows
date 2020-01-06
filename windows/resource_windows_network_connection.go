@@ -64,7 +64,6 @@ func resourceWindowsNetworkConnection() *schema.Resource {
             "old_name": &schema.Schema{
                 Type:     schema.TypeString,
                 Optional: true,
-                Computed: true,
                 ForceNew: true,
 
                 ConflictsWith: []string{ "guid", "ipv4_gateway_address", "ipv6_gateway_address", "name" },
@@ -72,13 +71,11 @@ func resourceWindowsNetworkConnection() *schema.Resource {
             "new_name": &schema.Schema{
                 Type:     schema.TypeString,
                 Optional: true,
-                Computed: true,
             },
 
             "allow_disconnect": &schema.Schema{
                 Type:     schema.TypeBool,
                 Optional: true,
-                Default:  false,
             },
 
             "connection_profile": &schema.Schema{
@@ -97,6 +94,12 @@ func resourceWindowsNetworkConnection() *schema.Resource {
             "ipv6_connectivity": &schema.Schema{
                 Type:     schema.TypeString,
                 Computed: true,
+            },
+
+            "network_adapter_names": &schema.Schema{
+                Type:     schema.TypeList,
+                Computed: true,
+                Elem:     &schema.Schema{ Type: schema.TypeString },
             },
 
             // lifecycle customizations that are not supported by the 'lifecycle' meta-argument for persistent resources (similar to data-sources)
@@ -174,11 +177,11 @@ func resourceWindowsNetworkConnectionCreate(d *schema.ResourceData, m interface{
     }
 
     var id string
-    if guid != ""               { id = guid               } else
+    if guid               != "" { id = guid               } else
     if ipv4GatewayAddress != "" { id = ipv4GatewayAddress } else
     if ipv6GatewayAddress != "" { id = ipv6GatewayAddress } else
-    if name != ""               { id = name               } else
-    if oldName != ""            { id = oldName            }
+    if name               != "" { id = name               } else
+    if oldName            != "" { id = oldName            }
     id = fmt.Sprintf("//%s/network_connections/%s", host, id)
 
     log.Printf(`[INFO][terraform-provider-windows] creating windows_network_connection %q
@@ -211,7 +214,7 @@ func resourceWindowsNetworkConnectionCreate(d *schema.ResourceData, m interface{
     ncQuery.IPv6GatewayAddress = ipv6GatewayAddress
     ncQuery.Name               = name
     ncQuery.OldName            = oldName
-    ncQuery.AllowDisconnect = d.Get("allow_disconnect").(bool)
+    ncQuery.AllowDisconnect    = d.Get("allow_disconnect").(bool)
 
     networkConnection, err := c.ReadNetworkConnection(ncQuery)
     if err != nil {
@@ -231,6 +234,7 @@ func resourceWindowsNetworkConnectionCreate(d *schema.ResourceData, m interface{
             d.Set("connection_profile", "")
             d.Set("ipv4_connectivity", "")
             d.Set("ipv6_connectivity", "")
+            d.Set("network_adapter_names", nil)
 
             // set computed lifecycle properties
             x_lifecycle["exists"] = false
@@ -252,15 +256,14 @@ func resourceWindowsNetworkConnectionCreate(d *schema.ResourceData, m interface{
     x_lifecycle["exists"] = true
     d.Set("x_lifecycle", []interface{}{ x_lifecycle })
 
-    // set properties
-    setNetworkConnectionProperties(d, networkConnection)
-
     // save original config
     setOriginalNetworkConnectionProperties(d, networkConnection)
 
-    if ( networkConnection.Name              == newName           ) &&
-       ( networkConnection.ConnectionProfile == connectionProfile ) {
+    if !diffNetworkConnectionProperties(d, networkConnection) {
         // no update required
+
+        // set properties
+        setNetworkConnectionProperties(d, networkConnection)
 
         // set id
         d.SetId(id)
@@ -269,9 +272,11 @@ func resourceWindowsNetworkConnectionCreate(d *schema.ResourceData, m interface{
         return nil
 
     } else {
-        // update required
-
+        // update
         log.Printf("[INFO][terraform-provider-windows] updating windows_network_connection %q\n", id)
+
+        // set principal identifying property, so it can be found after possible rename
+        d.Set("guid", networkConnection.GUID)
 
         ncProperties := new(api.NetworkConnection)
         expandNetworkConnectionProperties(ncProperties, d)
@@ -301,7 +306,7 @@ func resourceWindowsNetworkConnectionRead(d *schema.ResourceData, m interface{})
 
     x_lifecycle := tfutil.GetResource(d, "x_lifecycle")
 
-    // read network connection
+    // read
     ncQuery := new(api.NetworkConnection)
     ncQuery.GUID               = d.Get("guid").(string)
     ncQuery.IPv4GatewayAddress = d.Get("ipv4_gateway_address").(string)
@@ -328,6 +333,7 @@ func resourceWindowsNetworkConnectionRead(d *schema.ResourceData, m interface{})
             d.Set("connection_profile", "")
             d.Set("ipv4_connectivity", "")
             d.Set("ipv6_connectivity", "")
+            d.Set("network_adapter_names", nil)
 
             // set computed lifecycle properties
             x_lifecycle["exists"] = false
@@ -390,9 +396,9 @@ func resourceWindowsNetworkConnectionUpdate(d *schema.ResourceData, m interface{
         connectionProfile,
     )
 
-    // update network
+    // update
     ncQuery := new(api.NetworkConnection)
-    ncQuery.GUID            = guid
+    ncQuery.GUID = guid
 
     ncProperties := new(api.NetworkConnection)
     expandNetworkConnectionProperties(ncProperties, d)
@@ -417,7 +423,7 @@ func resourceWindowsNetworkConnectionDelete(d *schema.ResourceData, m interface{
     log.Printf("[INFO][terraform-provider-windows] deleting windows_network_connection %q from terraform state\n", id)
     log.Printf("[INFO][terraform-provider-windows] restoring original properties for windows_network_connection %q\n", id)
 
-    // restore network
+    // restore original config
     ncQuery := new(api.NetworkConnection)
     ncQuery.GUID = d.Get("guid").(string)
 
@@ -438,45 +444,59 @@ func resourceWindowsNetworkConnectionDelete(d *schema.ResourceData, m interface{
 
 //------------------------------------------------------------------------------
 
-func setNetworkConnectionProperties(d *schema.ResourceData, nProperties *api.NetworkConnection) {
-    d.Set("guid", nProperties.GUID)
+func setNetworkConnectionProperties(d *schema.ResourceData, ncProperties *api.NetworkConnection) {
+    d.Set("guid", ncProperties.GUID)
 
-    d.Set("ipv4_gateway_address", nProperties.IPv4GatewayAddress)
-    d.Set("ipv6_gateway_address", nProperties.IPv6GatewayAddress)
+    d.Set("ipv4_gateway_address", ncProperties.IPv4GatewayAddress)
+    d.Set("ipv6_gateway_address", ncProperties.IPv6GatewayAddress)
 
-    d.Set("name", nProperties.Name)
+    d.Set("name", ncProperties.Name)
     // d.Set("old_name", d.Get("old_name"))
     // d.Set("new_name", d.Get("new_name"))
 
     // d.Set("allow_disconnect", d.Get("allow_disconnect"))
 
-    d.Set("connection_profile", nProperties.ConnectionProfile)
+    d.Set("connection_profile", ncProperties.ConnectionProfile)
 
-    d.Set("ipv4_connectivity", nProperties.IPv4Connectivity)
-    d.Set("ipv6_connectivity", nProperties.IPv6Connectivity)
+    d.Set("ipv4_connectivity", ncProperties.IPv4Connectivity)
+    d.Set("ipv6_connectivity", ncProperties.IPv6Connectivity)
+
+    d.Set("network_adapter_names", ncProperties.NetworkAdapterNames)
 }
 
-func setOriginalNetworkConnectionProperties(d *schema.ResourceData, nProperties *api.NetworkConnection) {
+func setOriginalNetworkConnectionProperties(d *schema.ResourceData, ncProperties *api.NetworkConnection) {
     original := make(map[string]interface{})
 
-    original["old_name"]           = nProperties.Name
-    original["connection_profile"] = nProperties.ConnectionProfile
+    original["old_name"]           = ncProperties.Name
+    original["connection_profile"] = ncProperties.ConnectionProfile
 
     d.Set("original", []interface{}{ original })
 }
 
 //------------------------------------------------------------------------------
 
-func expandNetworkConnectionProperties(nProperties *api.NetworkConnection, d *schema.ResourceData) {
-    nProperties.NewName           = d.Get("new_name").(string)
-    nProperties.ConnectionProfile = d.Get("connection_profile").(string)
+func diffNetworkConnectionProperties(d *schema.ResourceData, ncProperties *api.NetworkConnection) bool {
+    if v, ok := d.GetOk("new_name"); ok && ( ncProperties.Name != v.(string) ) {
+        return true
+    }
+
+    if v, ok := d.GetOk("connection_profile"); ok && ( ncProperties.ConnectionProfile != v.(string) ) {
+        return true
+    }
+
+    return false
 }
 
-func expandOriginalNetworkConnectionProperties(nProperties *api.NetworkConnection, d *schema.ResourceData) {
+func expandNetworkConnectionProperties(ncProperties *api.NetworkConnection, d *schema.ResourceData) {
+    ncProperties.NewName           = d.Get("new_name").(string)
+    ncProperties.ConnectionProfile = d.Get("connection_profile").(string)
+}
+
+func expandOriginalNetworkConnectionProperties(ncProperties *api.NetworkConnection, d *schema.ResourceData) {
     original := tfutil.GetResource(d, "original")
 
-    nProperties.NewName           = original["old_name"].(string)
-    nProperties.ConnectionProfile = original["connection_profile"].(string)
+    ncProperties.NewName           = original["old_name"].(string)
+    ncProperties.ConnectionProfile = original["connection_profile"].(string)
 }
 
 //------------------------------------------------------------------------------

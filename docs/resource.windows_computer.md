@@ -10,24 +10,30 @@
 ### Example Usage
 
 ```terraform
-resource "windows_computer" "my_computer" {
-    new_name = "MY-COMPUTER"
-
+resource "windows_computer" "my_computer_1" {
     dns_client {
         suffix_search_list = [ "local" ]
         enable_devolution  = true
         devolution_level   = 0
     }
 }
+output "my_computer_1_name" {
+    value = windows_computer.my_computer_1.name
+}
+```
 
-output "my_computer_name" {
-    value = windows_computer.my_computer.name
+```terraform
+resource "windows_computer" "my_computer_2" {
+    new_name = "MY-COMPUTER"
 }
-output "my_computer_reboot_pending" {
-    value = windows_computer.my_computer.reboot_pending
+output "my_computer_2_name" {
+    value = windows_computer.my_computer_2.name
 }
-output "my_computer_rename_pending" {
-    value = windows_computer.my_computer.reboot_pending_details[0].computer_rename_pending
+output "my_computer_2_reboot_pending" {
+    value = windows_computer.my_computer_2.reboot_pending
+}
+output "my_computer_2_rename_pending" {
+    value = windows_computer.my_computer_2.reboot_pending_details[0].computer_rename_pending
 }
 ```
 
@@ -91,25 +97,43 @@ In addition to the argument attributes:
 
   - `computer_rename_pending` - (boolean) -  The windows-computer is waiting for a reboot because it was given a new name.
 
-  - Other attributes are outside the scope of this documentation.  They refer to Windows registry items - see table below.  For more information, please refer to the Windows documentation
+  - Other attributes are outside the scope of this documentation.  They refer to Windows registry items - see tables below.  For more information, please refer to the Windows documentation
 
 <br/>
 
-> :information_source:  
-> 
-> Mapping of `reboot_pending_details` on the Windows registry
-> 
-> attribute                 | key, <br/> `true` condition
-> :-------------------------|:-------------------------- 
-> `computer_rename_pending` | `HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\ComputerName`, <br/> `ComputerName` value not equal to `$env:ComputerName`
-> `current_reboot_attemps`  | `HKLM:\SOFTWARE\Microsoft\ServerManager\CurrentRebootAttempts`, <br/> key exist
-> `dvd_reboot_signal`       | `HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce`, <br/> `DVDRebootSignal` value exists
-> `file_rename_pending`     | `HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager`, <br/> `PendingFileRenameOperations` value exists or `PendingFileRenameOperations2` value exists
-> `netlogon_pending`        | `HKLM:\SYSTEM\CurrentControlSet\Services\Netlogon`, <br/> `JoinDomain` value exists or `AvoidSpnSet` value exists
-> `packages_pending`        | `HKLM:\Software\Microsoft\Windows\CurrentVersion\Component Based Servicing\PackagesPending`, <br/> key exist
-> `post_reboot_reporting`   | `HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\PostRebootReporting`, <br/> key exists 
-> `reboot_in_progress`      | `HKLM:\Software\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootInProgress`, <br/> key exist
-> `reboot_pending`          | `HKLM:\Software\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending`, <br/> key exist
-> `reboot_required`         | `HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired`, <br/> key exists
-> `services_pending`        | `HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Services\Pending`, <br/> any GUID subkeys exist
-> `update_exe_volatile`     | `HKLM:\SOFTWARE\Microsoft\Updates`, <br/> `UpdateExeVolatile` value not equal to 0
+### API Mapping
+
+To help with debugging, the following provides an overview of where the attributes can be found, using shell commands.
+
+###### Mapping of attributes on Powershell
+
+attribute                     | command
+:-----------------------------|:------------
+`name`                        | `$env:ComputerName`
+`new_name`                    | `( Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\ComputerName' -Name 'ComputerName' ).ComputerName`
+`dns_client`                  | &nbsp;
+ -&nbsp;`suffix_search_list`  | `( Get-DnsClientGlobalSetting ).SuffixSearchList`
+ -&nbsp;`enable_devolution`   | `( Get-DnsClientGlobalSetting ).UseDevolution`
+ -&nbsp;`devolution_level`    | `( Get-DnsClientGlobalSetting ).DevolutionLevel`
+`reboot_pending`              | see table below
+`reboot_pending_details`      | see table below
+
+
+###### Mapping of `reboot_pending_details` on the Windows registry
+
+attribute                 | key, <br/> condition for `true` value 
+:-------------------------|:------------------------------------- 
+`computer_rename_pending` | `HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\ComputerName`, <br/> `ComputerName` value not equal to `$env:ComputerName`
+`current_reboot_attemps`  | `HKLM:\SOFTWARE\Microsoft\ServerManager\CurrentRebootAttempts`, <br/> key exist
+`dvd_reboot_signal`       | `HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce`, <br/> `DVDRebootSignal` value exists
+`file_rename_pending`     | `HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager`, <br/> `PendingFileRenameOperations` value exists or `PendingFileRenameOperations2` value exists
+`netlogon_pending`        | `HKLM:\SYSTEM\CurrentControlSet\Services\Netlogon`, <br/> `JoinDomain` value exists or `AvoidSpnSet` value exists
+`packages_pending`        | `HKLM:\Software\Microsoft\Windows\CurrentVersion\Component Based Servicing\PackagesPending`, <br/> key exist
+`post_reboot_reporting`   | `HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\PostRebootReporting`, <br/> key exists 
+`reboot_in_progress`      | `HKLM:\Software\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootInProgress`, <br/> key exist
+`reboot_pending`          | `HKLM:\Software\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending`, <br/> key exist
+`reboot_required`         | `HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired`, <br/> key exists
+`services_pending`        | `HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Services\Pending`, <br/> any GUID subkeys exist
+`update_exe_volatile`     | `HKLM:\SOFTWARE\Microsoft\Updates`, <br/> `UpdateExeVolatile` value not equal to 0
+
+<br/>

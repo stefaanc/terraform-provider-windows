@@ -21,31 +21,33 @@ import (
 //------------------------------------------------------------------------------
 
 type NetworkConnection struct {
-    GUID               string
+    GUID                string
 
-    IPv4GatewayAddress string
-    IPv6GatewayAddress string
+    IPv4GatewayAddress  string
+    IPv6GatewayAddress  string
 
-    Name               string
-    OldName            string
-    NewName            string
+    Name                string
+    OldName             string
+    NewName             string
 
-    AllowDisconnect    bool
+    AllowDisconnect     bool
 
-    ConnectionProfile  string
+    ConnectionProfile   string
 
-    IPv4Connectivity   string
-    IPv6Connectivity   string
+    IPv4Connectivity    string
+    IPv6Connectivity    string
+
+    NetworkAdapterNames []string
 }
 
 //------------------------------------------------------------------------------
 
 func (c *WindowsClient) ReadNetworkConnection(ncQuery *NetworkConnection) (ncProperties *NetworkConnection, err error) {
-    if ( ncQuery.GUID == "")                &&
+    if ( ncQuery.GUID               == "" ) &&
        ( ncQuery.IPv4GatewayAddress == "" ) &&
        ( ncQuery.IPv6GatewayAddress == "" ) &&
-       ( ncQuery.Name == "" )               &&
-       ( ncQuery.OldName == "" )            {
+       ( ncQuery.Name               == "" ) &&
+       ( ncQuery.OldName            == "" ) {
         return nil, fmt.Errorf("[ERROR][terraform-provider-windows/api/ReadNetworkConnection(ncQuery)] empty 'ncQuery'")
     }
 
@@ -65,12 +67,11 @@ func (c *WindowsClient) UpdateNetworkConnection(ncQuery *NetworkConnection, ncPr
 func readNetworkConnection(c *WindowsClient, ncQuery *NetworkConnection) (ncProperties *NetworkConnection, err error) {
     // find id
     var id interface{}
-    if        ncQuery.GUID != ""               { id = ncQuery.GUID
-    } else if ncQuery.IPv4GatewayAddress != "" { id = ncQuery.IPv4GatewayAddress
-    } else if ncQuery.IPv6GatewayAddress != "" { id = ncQuery.IPv6GatewayAddress
-    } else if ncQuery.Name != ""               { id = ncQuery.Name
-    } else if ncQuery.OldName != ""            { id = ncQuery.OldName
-    }
+    if ncQuery.GUID               != "" { id = ncQuery.GUID               } else
+    if ncQuery.IPv4GatewayAddress != "" { id = ncQuery.IPv4GatewayAddress } else
+    if ncQuery.IPv6GatewayAddress != "" { id = ncQuery.IPv6GatewayAddress } else
+    if ncQuery.Name               != "" { id = ncQuery.Name               } else
+    if ncQuery.OldName            != "" { id = ncQuery.OldName            }
 
     // convert query to JSON
     ncQueryJSON, err := json.Marshal(ncQuery)
@@ -408,13 +409,15 @@ var readNetworkConnectionScript = script.New("readNetworkConnection", "powershel
     # find ipv4-gateway-address
     if ( -not $ipv4GatewayAddress -or ( $id -ne $ipv4GatewayAddress ) ) {
         $gatewayRoutes      = Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction 'Ignore'
-        $ipv4GatewayAddress = findGatewayAddress $gatewayRoutes $networkConnectionProfile[0]
-        if ( -not $ipv4GatewayAddress ) {
-            if ( -not $allowDisconnect ) {
-                $ipv4GatewayAddress = ""
-            }
-            else {
-                $ipv4GatewayAddress = findGatewayAddressWithDisconnections $gatewayRoutes $networkConnectionProfile[0]
+        if ( $gatewayRoutes ) {
+            $ipv4GatewayAddress = findGatewayAddress $gatewayRoutes $networkConnectionProfile[0]
+            if ( -not $ipv4GatewayAddress ) {
+                if ( -not $allowDisconnect ) {
+                    $ipv4GatewayAddress = ""
+                }
+                else {
+                    $ipv4GatewayAddress = findGatewayAddressWithDisconnections $gatewayRoutes $networkConnectionProfile[0]
+                }
             }
         }
     }
@@ -422,25 +425,32 @@ var readNetworkConnectionScript = script.New("readNetworkConnection", "powershel
     # find ipv6-gateway-address
     if ( -not $ipv6GatewayAddress -or ( $id -ne $ipv6GatewayAddress ) ) {
         $gatewayRoutes      = Get-NetRoute -DestinationPrefix '::/0' -ErrorAction 'Ignore'
-        $ipv6GatewayAddress = findGatewayAddress $gatewayRoutes $networkConnectionProfile[0]
-        if ( -not $ipv6GatewayAddress ) {
-            if ( -not $allowDisconnect ) {
-                $ipv6GatewayAddress = ""
-            }
-            else {
-                $ipv6GatewayAddress = findGatewayAddressWithDisconnections $gatewayRoutes $networkConnectionProfile[0]
+        if ( $gatewayRoutes ) {
+            $ipv6GatewayAddress = findGatewayAddress $gatewayRoutes $networkConnectionProfile[0]
+            if ( -not $ipv6GatewayAddress ) {
+                if ( -not $allowDisconnect ) {
+                    $ipv6GatewayAddress = ""
+                }
+                else {
+                    $ipv6GatewayAddress = findGatewayAddressWithDisconnections $gatewayRoutes $networkConnectionProfile[0]
+                }
             }
         }
     }
 
     $ncProperties = @{
-        GUID               = $guid
-        IPv4GatewayAddress = $ipv4GatewayAddress
-        IPv6GatewayAddress = $ipv6GatewayAddress
-        Name               = $networkConnectionProfile[0].Name
-        ConnectionProfile  = $networkConnectionProfile[0].NetworkCategory.ToString()
-        IPv4Connectivity   = $networkConnectionProfile[0].IPv4Connectivity.ToString()
-        IPv6Connectivity   = $networkConnectionProfile[0].IPv6Connectivity.ToString()
+        GUID                = $guid
+        IPv4GatewayAddress  = $ipv4GatewayAddress
+        IPv6GatewayAddress  = $ipv6GatewayAddress
+        Name                = $networkConnectionProfile[0].Name
+        ConnectionProfile   = $networkConnectionProfile[0].NetworkCategory.ToString()
+        IPv4Connectivity    = $networkConnectionProfile[0].IPv4Connectivity.ToString()
+        IPv6Connectivity    = $networkConnectionProfile[0].IPv6Connectivity.ToString()
+        NetworkAdapterNames = @()
+    }
+
+    $networkConnectionProfile | foreach {
+        $ncProperties.NetworkAdapterNames += $_.InterfaceAlias
     }
 
     Write-Output $( ConvertTo-Json -InputObject $ncProperties -Depth 100 )
@@ -510,7 +520,6 @@ var updateNetworkConnectionScript = script.New("updateNetworkConnection", "power
     $guid = $ncQuery.GUID
 
     Get-NetConnectionProfile -ErrorAction 'Ignore' | foreach {
-        $id = $guid
         $registryProfile = Get-Item -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\NetworkList\Profiles\{$guid}" -ErrorAction Ignore
         if ( $registryProfile ) {
             $n = ( Get-ItemProperty -Path $registryProfile.PSPath -Name 'ProfileName' ).ProfileName
@@ -520,7 +529,7 @@ var updateNetworkConnectionScript = script.New("updateNetworkConnection", "power
         }
     }
     if ( -not $networkConnectionProfile ) {
-        throw "cannot find network_connection '$id'"
+        throw "cannot find network_connection '$guid'"
     }
 
     $ncProperties = ConvertFrom-Json -InputObject '{{.NCPropertiesJSON}}'

@@ -20,7 +20,7 @@ The provider has been developed and tested on a Windows 10 machine, but may be u
 To build:
 - [GNU make](https://www.gnu.org/software/make/)
 - [Golang](https://golang.org/) >= v1.13
-- [Terraform plugin SDK](https://github.com/hashicorp/terraform-plugin-sdk) ~= v1.0.0
+- [Terraform plugin SDK](https://github.com/hashicorp/terraform-plugin-sdk) ~= v1.4.0
 
 To use:
 - [Terraform](https://terraform.io) >= v0.12.17
@@ -139,17 +139,23 @@ For `type = "ssh"`
 
 ### Data Sources
 
-- [**windows_link_ip_interface**](docs/datasource.windows_link_ip_interface.md) -  Provides identifying attributes for resources that are related to an IP interface.
+- [**windows_computer**](docs/datasource.windows_computer.md) -  Exports the attributes of a windows computer.  This includes it's DNS-client attributes, and reboot-pending status.
+
+- [**windows_network_adapter**](docs/datasource.windows_network_adapter.md) -  Exports the attributes of a network-adapter.  This includes it's MAC address, DNS-client attributes, and statusses.
+
+- [**windows_network_connection**](docs/datasource.windows_network_connection.md) -  Exports the attributes of a network-connection.  This includes it's IPv4 and IPv6 gateways, connection-profile, and connectivity-status.
+
+- [**windows_network_interface**](docs/datasource.windows_network_interface.md) -  Exports the attributes of a network interface.  This provides identifying attributes of other resources that are associated to this network interface.  This includes it's GUID, index, alias, description, MAC address, associated network-adapter name, associated vnetwork-adapter name, associated network-connection names, associated vswitch name and associated computer name. 
 
 <br/>
 
 ### Resources
 
-- [**windows_computer**](docs/resource.windows_computer.md) -  Provides access to the attributes of a windows computer.  This includes it's name, dns-client attributes, and reboot-pending status.
+- [**windows_computer**](docs/resource.windows_computer.md) -  Provides access to the attributes of a windows computer.  This includes it's DNS-client attributes, and reboot-pending status.
 
-- [**windows_network_connection**](docs/resource.windows_network_connection.md) -  Provides access to the attributes of the network-connections of a windows computer.  This includes their IPv4 and IPv6 default gateways, dns-client attributes, and status.
+- [**windows_network_adapter**](docs/resource.windows_network_adapter.md) -  Provides access to the attributes of a network-adapter.  This includes it's MAC address, DNS-client attributes, and statusses.
 
-- [**windows_network_adapter**](docs/resource.windows_network_adapter.md) -  Provides access to the attributes of the network-adapters of a windows computer.  This includes their MAC address, IP addresses, default gateways, DNS server addresses, and status.
+- [**windows_network_connection**](docs/resource.windows_network_connection.md) -  Provides access to the attributes of a network-connection.  This includes it's IPv4 and IPv6 gateways, connection-profile, and connectivity-status.
 
 
 
@@ -222,7 +228,9 @@ output "my_resource_imported" {
 
 ### Persistent Resources
 
-A special class of resources are resources that cannot be created using Terraform, and cannot be destroyed using Terraform.  In this respect they behave similar to data sources.  However, unlike data sources but similar to other resources, one can change some of the attributes of these resources.  Also, unlike data sources, the original attribute values will be restored when destroying the resource (even if these values were set outside of Terraform).  Typical examples are physical resources or resources that are related to physical resources, like a physical computer or a physical network adapter.
+A special class of resources are resources that cannot be created using Terraform, and cannot be destroyed using Terraform.  In this respect they behave similar to data sources.  However, unlike data sources but like other resources, one can change some of the properties of these resources.  Typical examples are physical resources or resources that are related to physical resources, like a physical computer or a physical network adapter.
+
+Also, unlike data sources, the original attribute values will be restored when deleting the resource from the Terraform state, even if these values were set outside of Terraform.  Therefore, in order to undo any changes that happen outside of Terraform, it is important to always use a "data source" instead of a "resource" when you don't intend to change any properties of a persistent resource.  All of the persistent resources have a corresponding Terraform "data source" for this reason.
 
 For these resources:
  
