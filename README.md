@@ -70,8 +70,8 @@ To use:
 
    - `%AppData%\terraform.d\plugins` on Windows
    - `$HOME\.terraform.d\plugins` on Linux
-<br/>
 
+<br/>
 > :bulb:  
 > Alternatively, you can try our latest release-in-progress under the `releases` folder.  No guarantee though this will be a fully working provider.
 
@@ -130,10 +130,18 @@ For `type = "ssh"`
 
 - `insecure` - (Optional, defaults to `false`) -  Allow insecure communication.  When `insecure = false`, the certificate of the windows computer is checked against the user's known hosts on the machine that runs Terraform, as specified by the file `~/.ssh/known_hosts`.  When `insecure = true`, this check is disabled.
 
+<br/>
 > :bulb:  
 > The provider's API needs elevated credentials ("Run as Administrator") for most methods.
 > When using `type = "local"`, you need to run terraform from an elevated shell.
 > When using `type = "ssh"`, terraform will always use the most elevated credentials available to the configured user.
+
+<br/>
+> :bulb:  
+> The easiest way to add a host to `~/.ssh/known_hosts` is by using the command: `ssh-keyscan $host >> ~/.ssh/known_hosts`, where `$host` is `localhost` or the name or IP address of the host.  
+> You can also hash the hosts names and addresses by using the `-H` switch: `ssh-keyscan -H $host >> ~/.ssh/known_hosts`
+>  
+> When this file is newly created, make sure that this file uses UTF-8 encoding without byte-order mark (BOM).  In Powershell you can set the default encoding for `>`, `>>` and `Out-File` by using the command: `$PSDefaultParameterValues['Out-File:Encoding'] = 'utf8'`.  Alternatively, you can set the encoding on a "per-command" basis using: `ssh-keyscan $host | Out-File ~/.ssh/known_hosts -Encoding 'utf8'` 
 
 <br/>
 

@@ -98,9 +98,6 @@ output "my_network_adapter_C_exists" {
 ```
 
 - `mac_address` - (string) -  The active MAC address of the network adapter.  This is the MAC address that is being used.
-
-  > :warning:  
-  > Changing a MAC address does cause a short disconnection from the network.
   
 - `permanent_mac_address` - (string) -  The permanent MAC address of the network adapter.  This is the MAC address that is "hard-coded" for the network adapter.  This address is not used when `mac_address` was changed to a different value.
 

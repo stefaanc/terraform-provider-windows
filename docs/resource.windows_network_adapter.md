@@ -91,6 +91,9 @@ When specifying `new_name`, don't use `name` to identify the adapter but use `ol
 
 - `mac_address` - (string, Optional) -  The MAC address of the network adapter.  
 
+  > :warning:  
+  > Changing a MAC address does cause a short disconnection from the network.
+
 - `dns_client` - (resource, Optional) -  When the network adapter is not a DNS client, i.e. when it doesn't have an IP interface, these attributes throw an error when in config.
 
   - `register_connection_address` - (boolean, Optional) -  Indicates whether the IP address for this connection is to be registered by the DNS client.
