@@ -48,10 +48,10 @@ output "my_computer_2_rename_pending" {
   - `suffix_search_list` - (list[string], Optional) -  Specifies a list of global suffixes that can be used in the specified order by the DNS client for resolving the IP address of the computer name. These suffixes are appended in the specified order to resolve the computer name that is specified. 
   This attribute cannot be set if the suffix search list setting is already deployed through Group Policy.
 
-  - `enable_devolution` - (boolean, Optional) -  Indicates whether devolution is activated. With devolution, the DNS resolver creates new FQDNs by appending the single-label, unqualified domain name with the parent suffix of the primary DNS suffix name, and the parent of that suffix, and so on, stopping if the name is successfully resolved or at a level specified in the DevolutionLevel parameter. Devolution works by removing the left-most label and continuing to get to the parent suffix. 
+  - `enable_devolution` - (boolean, Optional) -  Indicates whether devolution is activated. With devolution, the DNS resolver creates new FQDNs by appending the single-label, unqualified domain name with the parent suffix of the primary DNS suffix name, and the parent of that suffix, and so on, stopping if the name is successfully resolved or at a level specified in the `devolution_level` attribute. Devolution works by removing the left-most label and continuing to get to the parent suffix. 
   This attribute cannot be set if the devolution level setting is already deployed through Group Policy.
 
-  - `devolution_level` - (integer, Optional) -  Specifies the number of labels up to which devolution should occur.  The devolution level is an integer between `0` and `4294967295`.  If this attribute is `0`, then the FRD algorithm is used. If this attribute is greather than `0`, then devolution occurs until the specified level. 
+  - `devolution_level` - (integer, Optional) -  Specifies the number of labels up to which devolution should occur.  The devolution level is an integer between `0` and `4,294,967,295`.  If this attribute is `0`, then the FRD algorithm is used. If this attribute is greater than `0`, then devolution occurs until the specified level. 
   This attribute cannot be set if the devolution level setting is already deployed through Group Policy.
 
 <br/>

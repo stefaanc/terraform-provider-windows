@@ -79,7 +79,7 @@ output "my_network_adapter_4_exists" {
 > :warning:  
 > One of the identifying argument attributes is required.  Setting multiple identifying attributes will throw an error. 
 
-- `guid` - (string, Optional, Identifying) -  The GUID of the network connection profile.  This GUID can be used to access the Windows registry.
+- `guid` - (string, Optional, Identifying) -  The GUID of the network adapter.  This GUID can be used to access the Windows registry.
  
 - `name` - (string, Optional, Identifying) -  The name of the network adapter.  The name of the network adapter can be changed using the `new_name` attribute.
 

@@ -165,8 +165,8 @@ To help with debugging, the following provides an overview of where the attribut
 attribute                             | command
 :-------------------------------------|:------------
 `guid`                                | `( Get-ChildItem -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\NetworkList\Profiles' ).PSChildName.Trim("{}")`
-`ipv4_gateway_address`                | function(`( Get-NetConnectionProfile ).InterfaceIndex) \| ( Get-NetRoute -InterfaceIndex $_ ).NextHop`)
-`ipv6_gateway_address`                | function(`( Get-NetConnectionProfile ).InterfaceIndex \| ( Get-NetRoute  -InterfaceIndex $_ ).NextHop`)
+`ipv4_gateway_address`                | function(`( Get-NetRoute -InterfaceIndex $( Get-NetConnectionProfile ).InterfaceIndex ).NextHop`)
+`ipv6_gateway_address`                | function(`( Get-NetRoute -InterfaceIndex $( Get-NetConnectionProfile ).InterfaceIndex ).NextHop`)
 `name`                                | `( Get-NetConnectionProfile ).Name`
 `old_name`                            | not mapped
 `new_name`                            | not mapped
